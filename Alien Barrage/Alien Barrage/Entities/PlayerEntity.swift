@@ -12,7 +12,7 @@ class PlayerEntity: GKEntity {
     let movementComponent: MovementComponent
     let shootingComponent: ShootingComponent
 
-    static let shipSize = CGSize(width: 60, height: 80)
+    static let shipSize = CGSize(width: 80, height: 110)
 
     init(sceneSize: CGSize) {
         guard let texture = SpriteSheet.shared.sprite(named: "playerShip") else {
