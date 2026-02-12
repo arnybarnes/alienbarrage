@@ -24,57 +24,50 @@ class GameScene: SKScene {
         backgroundColor = .black
         physicsWorld.gravity = .zero
 
-        setupPlayer()
-    }
+        // Sprite test grid — validate new spritesheet coordinates
+        let sheet = SpriteSheet.shared
+        let testSprites: [(name: String, x: CGFloat, y: CGFloat, scale: CGFloat)] = [
+            ("alienLarge1",  65,  770, 0.6),
+            ("alienLarge2", 195,  770, 0.6),
+            ("alienLarge3", 325,  770, 0.6),
+            ("alienMedium1", 65,  670, 0.55),
+            ("alienMedium2",195,  670, 0.55),
+            ("alienSmall1", 65,  590, 0.7),
+            ("alienSmall2", 195,  590, 0.7),
+            ("playerShip",  195,  440, 0.35),
+            ("ufo",         195,  310, 0.18),
+            ("playerBullet", 65,  310, 1.0),
+            ("playerMissile",105,  310, 1.0),
+            ("enemyBullet", 145,  310, 1.0),
+            ("explosionGreen1", 325, 590, 0.4),
+            ("explosionOrange1", 325, 670, 0.4),
+            ("levelStart",  195,  200, 0.5),
+            ("gameOver",    195,  150, 0.5),
+            ("shield1",     65,  100, 0.6),
+            ("powerupRapidFire", 175, 100, 0.8),
+            ("plus100",     300,  100, 0.6),
+        ]
 
-    // MARK: - Setup
+        for item in testSprites {
+            if let tex = sheet.sprite(named: item.name) {
+                let sprite = SKSpriteNode(texture: tex)
+                sprite.position = CGPoint(x: item.x, y: item.y)
+                sprite.setScale(item.scale)
+                sprite.zPosition = 10
+                addChild(sprite)
+            }
+        }
 
-    private func setupPlayer() {
-        playerEntity = PlayerEntity(sceneSize: size)
-        addChild(playerEntity.spriteComponent.node)
-        entities.append(playerEntity)
-
-        playerEntity.shootingComponent.fireCallback = { [weak self] in
-            self?.spawnPlayerBullet()
+        // Show digit row at the bottom
+        for i in 0...9 {
+            if let tex = sheet.digitTexture(i) {
+                let digit = SKSpriteNode(texture: tex)
+                digit.position = CGPoint(x: CGFloat(60 + i * 30), y: 40)
+                digit.zPosition = 10
+                addChild(digit)
+            }
         }
     }
-
-    private func spawnPlayerBullet() {
-        let playerPos = playerEntity.spriteComponent.node.position
-        let bulletPos = CGPoint(x: playerPos.x, y: playerPos.y + PlayerEntity.shipSize.height / 2 + 5)
-
-        let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
-        addChild(bullet.spriteComponent.node)
-        entities.append(bullet)
-    }
-
-    // MARK: - Touch Handling
-
-    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first else { return }
-        touchStartLocation = touch.location(in: self)
-        playerStartX = playerEntity.spriteComponent.node.position.x
-        playerEntity.shootingComponent.isFiring = true
-    }
-
-    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard let touch = touches.first, let startLoc = touchStartLocation else { return }
-        let currentLoc = touch.location(in: self)
-        let deltaX = currentLoc.x - startLoc.x
-        playerEntity.movementComponent.move(toX: playerStartX + deltaX)
-    }
-
-    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchStartLocation = nil
-        playerEntity.shootingComponent.isFiring = false
-    }
-
-    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        touchStartLocation = nil
-        playerEntity.shootingComponent.isFiring = false
-    }
-
-    // MARK: - Update
 
     override func update(_ currentTime: TimeInterval) {
         if lastUpdateTime == 0 {

@@ -6,92 +6,92 @@
 import SpriteKit
 
 /// Singleton that loads the spritesheet and vends named SKTexture objects.
-/// All pixel coordinates are defined relative to the top-left of the 1536×1024 image.
+/// All pixel coordinates are defined relative to the top-left of the 1024×1024 image.
 class SpriteSheet {
 
     static let shared = SpriteSheet()
 
     let texture: SKTexture
-    let sheetWidth: CGFloat = 1536.0
+    let sheetWidth: CGFloat = 1024.0
     let sheetHeight: CGFloat = 1024.0
 
     /// Pixel rects for each sprite (x, y, width, height) — y measured from top of image
     private let spriteRects: [String: CGRect] = [
-        // Large Aliens - top row (6 heads, each ~148×160, row starts at y≈0)
-        "alienLarge1": CGRect(x: 0, y: 0, width: 148, height: 160),
-        "alienLarge2": CGRect(x: 148, y: 0, width: 148, height: 160),
-        "alienLarge3": CGRect(x: 296, y: 0, width: 148, height: 160),
-        "alienLarge4": CGRect(x: 444, y: 0, width: 148, height: 160),
-        "alienLarge5": CGRect(x: 592, y: 0, width: 148, height: 160),
-        "alienLarge6": CGRect(x: 740, y: 0, width: 148, height: 160),
+        // Large Aliens - top row (4 heads, ~125×125 each)
+        "alienLarge1": CGRect(x: 2, y: 2, width: 125, height: 125),
+        "alienLarge2": CGRect(x: 132, y: 2, width: 125, height: 125),
+        "alienLarge3": CGRect(x: 260, y: 2, width: 125, height: 125),
+        "alienLarge4": CGRect(x: 388, y: 2, width: 125, height: 125),
 
         // UFO / Mothership - top right
-        "ufo": CGRect(x: 900, y: 0, width: 380, height: 250),
+        "ufo": CGRect(x: 530, y: 0, width: 440, height: 200),
 
-        // Medium Aliens - second row (6 aliens, each ~148×135, row starts at y≈165)
-        "alienMedium1": CGRect(x: 0, y: 165, width: 148, height: 135),
-        "alienMedium2": CGRect(x: 148, y: 165, width: 148, height: 135),
-        "alienMedium3": CGRect(x: 296, y: 165, width: 148, height: 135),
-        "alienMedium4": CGRect(x: 444, y: 165, width: 148, height: 135),
-        "alienMedium5": CGRect(x: 592, y: 165, width: 148, height: 135),
-        "alienMedium6": CGRect(x: 740, y: 165, width: 148, height: 135),
+        // Medium Aliens - second row (4 aliens, ~125×115 each)
+        "alienMedium1": CGRect(x: 2, y: 135, width: 125, height: 115),
+        "alienMedium2": CGRect(x: 132, y: 135, width: 125, height: 115),
+        "alienMedium3": CGRect(x: 260, y: 135, width: 125, height: 115),
+        "alienMedium4": CGRect(x: 388, y: 135, width: 125, height: 115),
 
-        // Small Aliens - third row (row starts at y≈310)
-        "alienSmall1": CGRect(x: 0, y: 310, width: 100, height: 95),
-        "alienSmall2": CGRect(x: 105, y: 310, width: 100, height: 95),
-        "alienSmall3": CGRect(x: 210, y: 310, width: 100, height: 95),
-        "alienSmall4": CGRect(x: 315, y: 310, width: 100, height: 95),
+        // Small Aliens / Fighter sprites - middle area
+        "alienSmall1": CGRect(x: 225, y: 345, width: 65, height: 72),
+        "alienSmall2": CGRect(x: 300, y: 345, width: 65, height: 72),
+        "alienSmall3": CGRect(x: 375, y: 345, width: 65, height: 72),
+        "alienSmall4": CGRect(x: 450, y: 345, width: 65, height: 72),
 
-        // Projectiles (middle area)
-        "playerBullet": CGRect(x: 420, y: 315, width: 28, height: 60),
-        "playerMissile": CGRect(x: 460, y: 310, width: 35, height: 72),
-        "enemyBullet": CGRect(x: 508, y: 315, width: 28, height: 60),
+        // Orange Explosions
+        "explosionOrange1": CGRect(x: 2, y: 262, width: 125, height: 120),
+        "explosionOrange2": CGRect(x: 2, y: 680, width: 148, height: 148),
+        "explosionOrange3": CGRect(x: 2, y: 845, width: 148, height: 148),
 
-        // Green Explosions - right side (two rows of 3)
-        "explosionGreen1": CGRect(x: 920, y: 280, width: 150, height: 150),
-        "explosionGreen2": CGRect(x: 1080, y: 280, width: 150, height: 150),
-        "explosionGreen3": CGRect(x: 1240, y: 280, width: 150, height: 150),
-        "explosionGreen4": CGRect(x: 920, y: 440, width: 150, height: 150),
-        "explosionGreen5": CGRect(x: 1080, y: 440, width: 150, height: 150),
-        "explosionGreen6": CGRect(x: 1240, y: 440, width: 150, height: 150),
+        // Projectiles
+        "playerBullet": CGRect(x: 138, y: 260, width: 26, height: 80),
+        "playerMissile": CGRect(x: 175, y: 258, width: 36, height: 85),
+        "enemyBullet": CGRect(x: 222, y: 270, width: 30, height: 65),
 
-        // Orange Explosions - left side, below aliens
-        "explosionOrange1": CGRect(x: 0, y: 420, width: 155, height: 155),
-        "explosionOrange2": CGRect(x: 165, y: 420, width: 155, height: 155),
+        // Powerup orbs / targeting items (green circles)
+        "powerupRapidFire": CGRect(x: 268, y: 280, width: 58, height: 52),
+        "powerupSpreadShot": CGRect(x: 340, y: 280, width: 58, height: 52),
 
-        // Small Ships - center area (below small aliens/projectiles)
-        "ship1": CGRect(x: 285, y: 445, width: 88, height: 105),
-        "ship2": CGRect(x: 380, y: 445, width: 88, height: 105),
-        "ship3": CGRect(x: 475, y: 445, width: 88, height: 105),
-        "ship4": CGRect(x: 570, y: 445, width: 88, height: 105),
+        // Green Explosions - right side (2 rows of 3)
+        "explosionGreen1": CGRect(x: 540, y: 258, width: 148, height: 148),
+        "explosionGreen2": CGRect(x: 700, y: 258, width: 148, height: 148),
+        "explosionGreen3": CGRect(x: 855, y: 258, width: 148, height: 148),
+        "explosionGreen4": CGRect(x: 540, y: 418, width: 148, height: 148),
+        "explosionGreen5": CGRect(x: 700, y: 418, width: 148, height: 148),
+        "explosionGreen6": CGRect(x: 855, y: 418, width: 148, height: 148),
 
         // Player Ship - large, bottom-left with blue engines
-        "playerShip": CGRect(x: 10, y: 570, width: 250, height: 440),
+        "playerShip": CGRect(x: 5, y: 395, width: 185, height: 265),
 
-        // UI Text
-        "levelStart": CGRect(x: 665, y: 548, width: 490, height: 75),
-        "gameOver": CGRect(x: 665, y: 635, width: 465, height: 75),
-        "plus100": CGRect(x: 665, y: 725, width: 170, height: 58),
+        // Powerup items (below player ship area)
+        "powerupShield": CGRect(x: 210, y: 448, width: 58, height: 52),
+        "powerupExtraLife": CGRect(x: 280, y: 448, width: 58, height: 52),
 
         // Shield / Barrier blocks
-        "shield1": CGRect(x: 340, y: 760, width: 95, height: 95),
-        "shield2": CGRect(x: 445, y: 760, width: 95, height: 95),
+        "shield1": CGRect(x: 355, y: 490, width: 78, height: 68),
+        "shield2": CGRect(x: 445, y: 490, width: 78, height: 68),
 
-        // Powerups
-        "powerupGreen": CGRect(x: 550, y: 765, width: 75, height: 75),
-        "powerupShield": CGRect(x: 635, y: 765, width: 75, height: 75),
+        // UI Text
+        "levelStart": CGRect(x: 340, y: 640, width: 315, height: 38),
+        "gameOver": CGRect(x: 340, y: 688, width: 300, height: 38),
+        "plus100": CGRect(x: 535, y: 790, width: 120, height: 32),
 
         // Digits 0-9 (reading "1234567890" left to right from the sheet)
-        "digit1": CGRect(x: 830, y: 810, width: 50, height: 58),
-        "digit2": CGRect(x: 886, y: 810, width: 50, height: 58),
-        "digit3": CGRect(x: 942, y: 810, width: 50, height: 58),
-        "digit4": CGRect(x: 998, y: 810, width: 50, height: 58),
-        "digit5": CGRect(x: 1054, y: 810, width: 50, height: 58),
-        "digit6": CGRect(x: 1110, y: 810, width: 50, height: 58),
-        "digit7": CGRect(x: 1166, y: 810, width: 50, height: 58),
-        "digit8": CGRect(x: 1222, y: 810, width: 50, height: 58),
-        "digit9": CGRect(x: 1278, y: 810, width: 50, height: 58),
-        "digit0": CGRect(x: 1334, y: 810, width: 50, height: 58),
+        "digit1": CGRect(x: 342, y: 738, width: 28, height: 32),
+        "digit2": CGRect(x: 376, y: 738, width: 28, height: 32),
+        "digit3": CGRect(x: 410, y: 738, width: 28, height: 32),
+        "digit4": CGRect(x: 444, y: 738, width: 28, height: 32),
+        "digit5": CGRect(x: 478, y: 738, width: 28, height: 32),
+        "digit6": CGRect(x: 512, y: 738, width: 28, height: 32),
+        "digit7": CGRect(x: 546, y: 738, width: 28, height: 32),
+        "digit8": CGRect(x: 580, y: 738, width: 28, height: 32),
+        "digit9": CGRect(x: 614, y: 738, width: 28, height: 32),
+        "digit0": CGRect(x: 648, y: 738, width: 28, height: 32),
+
+        // More green explosions (bottom-right area)
+        "explosionGreen7": CGRect(x: 700, y: 580, width: 155, height: 155),
+        "explosionGreen8": CGRect(x: 855, y: 700, width: 148, height: 148),
+        "explosionGreen9": CGRect(x: 855, y: 855, width: 148, height: 148),
     ]
 
     private var textureCache: [String: SKTexture] = [:]
