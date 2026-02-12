@@ -20,11 +20,15 @@ class GameScene: SKScene {
     private var touchStartLocation: CGPoint?
     private var playerStartX: CGFloat = 0
 
+    // Aliens
+    private var alienFormation: AlienFormation?
+
     override func didMove(to view: SKView) {
-        backgroundColor = .black // TEMP: to see dark ship sprite
+        backgroundColor = .black
         physicsWorld.gravity = .zero
 
-        setupPlayer() 
+        setupPlayer()
+        setupAliens()
     }
 
     // MARK: - Setup
@@ -37,6 +41,15 @@ class GameScene: SKScene {
         playerEntity.shootingComponent.fireCallback = { [weak self] in
             self?.spawnPlayerBullet()
         }
+    }
+
+    private func setupAliens() {
+        alienFormation = AlienFormation(
+            rows: GameConstants.alienGridRows,
+            cols: GameConstants.alienGridColumns,
+            sceneSize: size
+        )
+        addChild(alienFormation!.formationNode)
     }
 
     private func spawnPlayerBullet() {
@@ -86,6 +99,8 @@ class GameScene: SKScene {
         for entity in entities {
             entity.update(deltaTime: dt)
         }
+
+        alienFormation?.update(deltaTime: dt)
 
         // Clean up entities whose sprites have been removed from the scene
         entities.removeAll { entity in

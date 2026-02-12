@@ -21,25 +21,23 @@ class SpriteSheet {
     private let spriteRects: [String: CGRect] = [
         // ── TOP-LEFT QUADRANT (0,0)-(1024,1024): Alien sprites ──
 
-        // Large Aliens - Row 1 (5 skull heads, ~165×175 each)
-        "alienLarge1": CGRect(x: 38, y: 22, width: 165, height: 175),
-        "alienLarge2": CGRect(x: 232, y: 22, width: 165, height: 175),
-        "alienLarge3": CGRect(x: 426, y: 22, width: 165, height: 175),
-        "alienLarge4": CGRect(x: 620, y: 22, width: 165, height: 175),
-        "alienLarge5": CGRect(x: 814, y: 22, width: 165, height: 175),
+        // Large Aliens - Row 1 (4 skull heads)
+        "alienLarge1": CGRect(x: 73, y: 76, width: 166, height: 154),
+        "alienLarge2": CGRect(x: 301, y: 76, width: 167, height: 154),
+        "alienLarge3": CGRect(x: 539, y: 76, width: 189, height: 154),
+        "alienLarge4": CGRect(x: 771, y: 76, width: 190, height: 154),
 
-        // Medium Aliens - Row 2 (5 spider aliens, ~165×170 each)
-        "alienMedium1": CGRect(x: 38, y: 235, width: 165, height: 170),
-        "alienMedium2": CGRect(x: 232, y: 235, width: 165, height: 170),
-        "alienMedium3": CGRect(x: 426, y: 235, width: 165, height: 170),
-        "alienMedium4": CGRect(x: 620, y: 235, width: 165, height: 170),
-        "alienMedium5": CGRect(x: 814, y: 235, width: 165, height: 170),
+        // Medium Aliens - Row 2 (4 spider aliens)
+        "alienMedium1": CGRect(x: 50, y: 220, width: 202, height: 230),
+        "alienMedium2": CGRect(x: 280, y: 220, width: 212, height: 230),
+        "alienMedium3": CGRect(x: 533, y: 220, width: 199, height: 230),
+        "alienMedium4": CGRect(x: 770, y: 220, width: 195, height: 230),
 
-        // Small Aliens - Row 3 (4 small drones, ~145×140 each)
-        "alienSmall1": CGRect(x: 50, y: 455, width: 145, height: 140),
-        "alienSmall2": CGRect(x: 244, y: 455, width: 145, height: 140),
-        "alienSmall3": CGRect(x: 438, y: 455, width: 145, height: 140),
-        "alienSmall4": CGRect(x: 632, y: 455, width: 145, height: 140),
+        // Small Aliens - Row 3 (4 small drones)
+        "alienSmall1": CGRect(x: 54, y: 440, width: 196, height: 219),
+        "alienSmall2": CGRect(x: 280, y: 440, width: 212, height: 218),
+        "alienSmall3": CGRect(x: 534, y: 440, width: 197, height: 219),
+        "alienSmall4": CGRect(x: 774, y: 440, width: 189, height: 215),
 
         // ── TOP-RIGHT QUADRANT (1024,0)-(2048,1024): Boss aliens + projectiles ──
 
