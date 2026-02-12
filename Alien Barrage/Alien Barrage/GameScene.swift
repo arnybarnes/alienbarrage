@@ -15,63 +15,66 @@ class GameScene: SKScene {
 
     private var lastUpdateTime: TimeInterval = 0
 
+    // Player
+    private var playerEntity: PlayerEntity!
+    private var touchStartLocation: CGPoint?
+    private var playerStartX: CGFloat = 0
+
     override func didMove(to view: SKView) {
         backgroundColor = .black
+        physicsWorld.gravity = .zero
 
-        // Phase 0 test: display several sprites to validate spritesheet extraction
-        let sheet = SpriteSheet.shared
-        let centerX = size.width / 2
+        setupPlayer()
+    }
 
-        // Large alien - top center
-        if let tex = sheet.sprite(named: "alienLarge1") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.position = CGPoint(x: centerX, y: size.height - 120)
-            sprite.zPosition = GameConstants.ZPosition.enemy
-            addChild(sprite)
-        }
+    // MARK: - Setup
 
-        // Medium alien
-        if let tex = sheet.sprite(named: "alienMedium1") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.position = CGPoint(x: centerX - 80, y: size.height - 280)
-            sprite.zPosition = GameConstants.ZPosition.enemy
-            addChild(sprite)
-        }
+    private func setupPlayer() {
+        playerEntity = PlayerEntity(sceneSize: size)
+        addChild(playerEntity.spriteComponent.node)
+        entities.append(playerEntity)
 
-        // Small alien
-        if let tex = sheet.sprite(named: "alienSmall1") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.position = CGPoint(x: centerX + 80, y: size.height - 280)
-            sprite.zPosition = GameConstants.ZPosition.enemy
-            addChild(sprite)
-        }
-
-        // Player ship - center
-        if let tex = sheet.sprite(named: "playerShip") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.setScale(0.4)
-            sprite.position = CGPoint(x: centerX, y: size.height / 2)
-            sprite.zPosition = GameConstants.ZPosition.player
-            addChild(sprite)
-        }
-
-        // Projectile
-        if let tex = sheet.sprite(named: "playerBullet") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.position = CGPoint(x: centerX, y: 200)
-            sprite.zPosition = GameConstants.ZPosition.projectile
-            addChild(sprite)
-        }
-
-        // UFO
-        if let tex = sheet.sprite(named: "ufo") {
-            let sprite = SKSpriteNode(texture: tex)
-            sprite.setScale(0.35)
-            sprite.position = CGPoint(x: centerX, y: 100)
-            sprite.zPosition = GameConstants.ZPosition.ufo
-            addChild(sprite)
+        playerEntity.shootingComponent.fireCallback = { [weak self] in
+            self?.spawnPlayerBullet()
         }
     }
+
+    private func spawnPlayerBullet() {
+        let playerPos = playerEntity.spriteComponent.node.position
+        let bulletPos = CGPoint(x: playerPos.x, y: playerPos.y + PlayerEntity.shipSize.height / 2 + 5)
+
+        let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
+        addChild(bullet.spriteComponent.node)
+        entities.append(bullet)
+    }
+
+    // MARK: - Touch Handling
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first else { return }
+        touchStartLocation = touch.location(in: self)
+        playerStartX = playerEntity.spriteComponent.node.position.x
+        playerEntity.shootingComponent.isFiring = true
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
+        guard let touch = touches.first, let startLoc = touchStartLocation else { return }
+        let currentLoc = touch.location(in: self)
+        let deltaX = currentLoc.x - startLoc.x
+        playerEntity.movementComponent.move(toX: playerStartX + deltaX)
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchStartLocation = nil
+        playerEntity.shootingComponent.isFiring = false
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
+        touchStartLocation = nil
+        playerEntity.shootingComponent.isFiring = false
+    }
+
+    // MARK: - Update
 
     override func update(_ currentTime: TimeInterval) {
         if lastUpdateTime == 0 {
@@ -82,6 +85,14 @@ class GameScene: SKScene {
 
         for entity in entities {
             entity.update(deltaTime: dt)
+        }
+
+        // Clean up entities whose sprites have been removed from the scene
+        entities.removeAll { entity in
+            if let spriteComp = entity.component(ofType: SpriteComponent.self) {
+                return spriteComp.node.parent == nil
+            }
+            return false
         }
 
         lastUpdateTime = currentTime

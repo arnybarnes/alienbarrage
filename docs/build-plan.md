@@ -486,36 +486,81 @@ For the `didBegin(_ contact:)` handler, we need to go from `SKPhysicsBody` → `
 
 ---
 
-## Phase 7: Audio, Menus, High Scores, & Final Polish
+## Phase 7: SwiftUI Menus, Settings, Audio, High Scores, & Final Polish
 
-**Goal:** Sound effects, title screen, persistent high scores, haptic feedback. Full game loop.
+**Goal:** SwiftUI app shell with menu and settings screens, sound effects, persistent high scores, haptic feedback. Full game loop. Settings for difficulty, autofire, and autofire speed.
+
+### Architecture: SwiftUI + SpriteKit Integration
+
+Replace the UIKit App Delegate + Storyboard entry point with a SwiftUI `@main App`. The game is embedded via `SpriteView`. Navigation between menu, settings, and game is handled by SwiftUI.
+
+**Flow:** App Launch → MenuView (SwiftUI) → [Settings (SwiftUI)] → Game (SpriteView) → Game Over → MenuView
 
 ### Files to Create
 
+**`Views/AlienBarrageApp.swift`**
+- `@main` struct conforming to `App`
+- Creates `GameSettings` as `@StateObject`
+- Body: `ContentView().environmentObject(gameSettings)`
+- Replaces `@main` on `AppDelegate.swift`
+
+**`Views/ContentView.swift`**
+- Manages app navigation state: `.menu`, `.playing`, `.settings`
+- Switches between `MenuView`, `SettingsView`, and `GameContainerView`
+- Passes `GameSettings` down via environment
+
+**`Views/MenuView.swift`**
+- SwiftUI menu screen
+- Display:
+  - "ALIEN BARRAGE" title (large, neon-styled text or custom font)
+  - High score from `HighScoreManager`
+  - "TAP TO START" button → transitions to `.playing`
+  - Settings gear icon → transitions to `.settings`
+  - Dark/black background matching game aesthetic
+- Animations: pulsing title, subtle glow effects
+
+**`Views/SettingsView.swift`**
+- SwiftUI settings screen with these options:
+  - **Difficulty** — picker: Easy / Normal / Hard
+    - Easy: slower aliens, slower fire rate, more lives (5)
+    - Normal: default values from GameConstants
+    - Hard: faster aliens, faster fire rate, fewer lives (2)
+  - **Autofire** — toggle (Bool)
+    - ON: ship fires automatically while alive (no touch required)
+    - OFF: ship fires only while touching (current behavior)
+  - **Autofire Speed** — slider (when autofire is ON)
+    - Range: slow (0.4s) to fast (0.1s) fire interval
+    - Default: 0.25s (same as normal fire rate)
+  - Back button to return to menu
+- All settings persisted via `@AppStorage` (UserDefaults)
+
+**`Views/GameContainerView.swift`**
+- Wraps `SpriteView(scene:)` for the game
+- Creates `GameScene` with the current `GameSettings` applied
+- Handles game-over callback to return to menu
+- Shows FPS overlay in debug builds
+- Portrait-locked
+
+**`GameSettings.swift`**
+- `ObservableObject` (also readable as plain class by GameScene)
+- Published properties:
+  - `difficulty: Difficulty` (enum: `.easy`, `.normal`, `.hard`)
+  - `autofire: Bool` (default: false)
+  - `autofireSpeed: TimeInterval` (default: 0.25, range 0.1...0.4)
+- All backed by `@AppStorage` for persistence
+- Computed properties that return adjusted game values based on difficulty:
+  - `effectiveAlienSpeed: CGFloat`
+  - `effectiveEnemyFireInterval: TimeInterval`
+  - `effectiveLives: Int`
+  - `effectiveFireRate: TimeInterval` (uses autofireSpeed when autofire is on, else playerFireRate)
+
 **`AudioManager.swift`**
 - Singleton: `AudioManager.shared`
-- Uses `AVAudioEngine` + `AVAudioPlayerNode` for programmatic retro synth sounds
-- Method: `play(_ soundName: String)` — checks `GameConstants.Sound` values, skips if empty string
-- Sound generation (if no external files): synthesize simple waveforms:
-  - Shoot: short high-pitched blip (square wave, 800Hz, 0.05s)
-  - Explosion: noise burst with decay (white noise, 0.3s fade)
-  - Powerup: ascending arpeggio (3 quick tones rising)
-  - UFO: warbling tone (sine wave with LFO modulation)
-  - Game over: descending tones
-  - Menu select: click/blip
-- Alternative: if actual .wav/.m4a files are provided later, play those via `SKAction.playSoundFileNamed()` or `AVAudioPlayer`
+- Method: `play(_ soundName: String)` — checks if string is empty, skips if so
+- If sound filename is non-empty: play via `SKAction.playSoundFileNamed()` or `AVAudioPlayer`
+- Future: could add programmatic synth sounds via `AVAudioEngine` if desired
 - All sounds respect the `GameConstants.Sound` string check — empty string = skip
 - Volume control and mute toggle
-
-**`Scenes/MenuScene.swift`**
-- Subclass `SKScene`
-- Display:
-  - "ALIEN BARRAGE" title — could use digit/text sprites or a custom `SKLabelNode` with retro font
-  - High score display using digit textures
-  - "TAP TO START" — blinking `SKLabelNode` or sprite
-  - Starfield background (reuse `ParticleEffects.starfield()`)
-- On tap: transition to `GameScene` with `SKTransition.fade(withDuration: 0.5)`
-- Shown on app launch and after game over
 
 **`HighScoreManager.swift`**
 - Singleton: `HighScoreManager.shared`
@@ -537,11 +582,20 @@ For the `didBegin(_ contact:)` handler, we need to go from `SKPhysicsBody` → `
 
 ### Files to Modify
 
-**`GameViewController.swift`**
-- Present `MenuScene` first instead of `GameScene`
-- Same scene size and scale mode
+**`AppDelegate.swift`**
+- Remove `@main` attribute (SwiftUI App struct takes over as entry point)
+- Keep lifecycle methods for background pause notification if needed
+- Or remove entirely if lifecycle is handled in SwiftUI
 
 **`GameScene.swift`**
+- Accept `GameSettings` reference on init: `init(size:settings:)`
+- Apply settings on setup:
+  - Use `settings.effectiveLives` for starting lives
+  - Use `settings.effectiveAlienSpeed` for formation base speed
+  - Use `settings.effectiveEnemyFireInterval` for enemy shooting timer
+  - Use `settings.effectiveFireRate` for player fire rate
+- Autofire logic: if `settings.autofire` is true, set `shootingComponent.isFiring = true` on scene start and never toggle it off. Touch controls only move the ship.
+- If autofire is false: current behavior (fire while touching)
 - Integrate `AudioManager.play()` calls at all event points:
   - Player shoots: `AudioManager.shared.play(GameConstants.Sound.playerShoot)`
   - Alien dies: `AudioManager.shared.play(GameConstants.Sound.enemyDeath)`
@@ -554,19 +608,32 @@ For the `didBegin(_ contact:)` handler, we need to go from `SKPhysicsBody` → `
   - Game over: `AudioManager.shared.play(GameConstants.Sound.gameOver)`
   - Shield hit: `AudioManager.shared.play(GameConstants.Sound.shieldHit)`
 - Integrate `HapticManager` calls alongside audio
-- On game over: submit score to `HighScoreManager`, transition to `MenuScene` on tap
+- On game over: submit score to `HighScoreManager`, notify SwiftUI to return to menu
 - Pause game on app background: observe `UIApplication.willResignActiveNotification`, set `isPaused = true`
 
-**`AppDelegate.swift`**
-- Post notification on `applicationWillResignActive` for game pause (or use NotificationCenter in GameScene directly)
+**`GameViewController.swift`**
+- May be removed entirely if using pure SwiftUI + SpriteView approach
+- Or kept as a fallback and wrapped via `UIViewControllerRepresentable`
+
+**Remove/update:**
+- `Main.storyboard` — remove Main storyboard reference from Info.plist (SwiftUI manages the window)
+- `LaunchScreen.storyboard` — keep for launch screen or replace with Info.plist launch config
+
+### Files to Remove
+- `Scenes/MenuScene.swift` — replaced by SwiftUI `MenuView`
 
 ### Test Criteria
-- Full game loop: Menu → Play → Game Over → Menu
+- Full game loop: SwiftUI Menu → Play → Game Over → SwiftUI Menu
+- Settings screen accessible from menu with difficulty, autofire, autofire speed options
+- Autofire ON: ship fires continuously without touching; touch only moves ship
+- Autofire OFF: ship fires only while touching (original behavior)
+- Autofire speed slider adjusts fire rate when autofire is on
+- Difficulty affects alien speed, enemy fire rate, and starting lives
+- Settings persist across app launches
 - High score persists across app launches
 - Sound plays on every action (once sound filenames are populated — until then, silent is fine)
 - Haptic feedback on shooting, kills, death, level complete
 - Game pauses when app goes to background
-- Tap to start from menu works
 - All prior functionality still works
 - No crashes, no visual glitches, smooth performance
 
@@ -590,6 +657,24 @@ The pixel rects in `SpriteSheet.swift` are visual estimates. During testing of e
 - Remove entities and their sprites when they leave the screen or are destroyed
 - The `SpriteSheet` texture cache prevents redundant texture creation
 - Particle emitters should have finite lifetimes (except the background starfield)
+
+### GameSettings & Autofire (Phase 7 Integration)
+When Phase 7 introduces `GameSettings`, earlier code will be updated:
+- **ShootingComponent** (Phase 1): if `autofire` is ON, `isFiring` is set to `true` at scene start and touch only controls movement. Fire rate uses `autofireSpeed` from settings.
+- **AlienFormation** (Phase 2): base speed adjusted by `difficulty` setting.
+- **Enemy shooting** (Phase 4): fire interval adjusted by `difficulty` setting.
+- **PlayerEntity** (Phase 1): starting lives adjusted by `difficulty` setting.
+- **GameScene init** accepts a `GameSettings` object and applies all values during setup.
+- Until Phase 7, all values use the defaults in `GameConstants`.
+
+### SwiftUI + SpriteKit Architecture (Phase 7)
+The app transitions from UIKit (AppDelegate + Storyboard) to SwiftUI (`@main App` + `SpriteView`). During Phases 0-6, the game runs via `GameViewController` with the storyboard. In Phase 7, this is replaced with:
+- `AlienBarrageApp.swift` — `@main` entry point
+- `ContentView.swift` — navigation state manager
+- `MenuView.swift` — main menu with start + settings buttons
+- `SettingsView.swift` — difficulty, autofire toggle, autofire speed slider
+- `GameContainerView.swift` — wraps `SpriteView(scene: GameScene(...))`
+- `GameSettings.swift` — `ObservableObject` with `@AppStorage`-backed properties
 
 ### Performance Targets
 - Maintain 60 FPS at all times
