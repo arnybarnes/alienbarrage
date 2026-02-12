@@ -6,9 +6,9 @@ The name will be Alien Barrage and the bundle ID will be
 com.biffna.retrostyle1.
 
 The game will be based on the gameplay of Space Invaders, but use the imagery defined in spritesheet.png. 
-Claude will copy the spritesheet into the project and use it for the images. 
+Claude will copy the spritesheet into the project and use it for the images, hopefully just using the one spritesheet instead of making several images.
 
 The theme is: an evil Alien race of cybernetic beings seeks to assimilate humans and other biological lifeforms - as the human race tries to defend itself.
 
-During the building of the game, Claude will think of ways we can enhance the game with Apple Intelligence and keep that in a separate doc for discussion and planning later.
+During the building of the game, Claude will think of ways we can enhance the game with Apple Intelligence and keep that in a separate doc for discussion and planning later. The intention is for devices with Apple Intelligence will use these features but those without will not.
 
