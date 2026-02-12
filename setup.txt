@@ -1,0 +1,4 @@
+We will be creating a game from the provided XCode project, iOS game template with Gameplay Kit integrated.
+
+The name will be Alien Barrage and the bundle ID will be 
+com.biffna.retrostyle1.
