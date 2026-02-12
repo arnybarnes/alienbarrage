@@ -1,0 +1,90 @@
+Original
+create an sprite sheet containing all the graphics to be used in a space invaders like game on an xcode iOS Game template with GamePlay kit. The visual theme will be based on a different Alien, a cybernetic race seeking to assimilate all biological life. Make the graphics crisp, sharp, high res, with an evil darkness to the enemy. 
+
+
+
+
+ Prompt 1 — Top-Left (Enemy Aliens)
+
+  Create a 1024x1024 pixel sprite sheet on a fully transparent background (PNG with alpha). This is the top-left quadrant of a larger game sprite sheet for a space
+   invaders-style iOS game. The visual theme is a cybernetic alien race seeking to assimilate all biological life — crisp, sharp, high-res sprites with an evil
+  darkness to the enemies.
+
+  Layout exactly 3 rows of 5 sprites each, evenly spaced in a grid with ~20px gaps:
+
+  Row 1 (y ~25, 5 sprites, each ~180x180): 5 large alien heads/skulls — these are the heavy/boss-type enemies. Each should be a menacing cybernetic skull with
+  glowing eyes. Vary the eye color across the 5: red, orange, green, blue, purple. Dark metallic armor with green circuit-line accents.
+
+  Row 2 (y ~230, 5 sprites, each ~180x180): 5 medium spider/insect aliens — these are mid-tier enemies. Cybernetic spider-like bodies with multiple green-glowing
+  limbs and mechanical joints. Each should be a slight variation (different leg poses or limb count).
+
+  Row 3 (y ~440, 5 sprites, each ~160x160): 5 small fighter aliens — these are the basic grunt enemies. Compact, insect-like cybernetic drones with green glowing
+  cores. Smaller and simpler than the medium aliens.
+
+  All sprites should face downward (toward the player). Leave the bottom ~350px of the image empty/transparent.
+
+  ---
+  Prompt 2 — Top-Right (Projectiles + Alien Variants)
+
+  Create a 1024x1024 pixel sprite sheet on a fully transparent background (PNG with alpha). This is the top-right quadrant of a larger game sprite sheet for a
+  space invaders-style iOS game. Same cybernetic alien theme — crisp, sharp, high-res, evil and dark with green energy accents.
+
+  Layout these sprites:
+
+  Top area (y 30-600): 3 large cybernetic crab/spider boss aliens arranged in a row, each ~300x280 pixels. These are elite alien types — heavily armored with
+  multiple mechanical limbs, glowing green energy cores, and menacing postures. More complex and detailed than the medium aliens. Below them, 2 additional medium
+  alien variants (~200x180 each).
+
+  Bottom strip (y 680-960), 3 projectiles arranged left to right:
+  - Left (x ~60): A vertical green energy beam/laser bolt, ~50px wide × 240px tall. Bright green glowing plasma with energy wisps.
+  - Center (x ~380): A missile/torpedo, ~45px wide × 80px tall. Metallic with a green glowing tip, small fins.
+  - Right (x ~520): A horizontal orange/red fire blast, ~420px wide × 55px tall. Flame projectile with trailing fire, used as an enemy weapon.
+
+  ---
+  Prompt 3 — Bottom-Left (Player Ship, UFO, Shields, UI Text)
+
+  Create a 1024x1024 pixel sprite sheet on a fully transparent background (PNG with alpha). This is the bottom-left quadrant of a larger game sprite sheet for a
+  space invaders-style iOS game. Crisp, sharp, high-res graphics. The player's side should feel heroic but still fit the dark sci-fi theme.
+
+  Layout these sprites:
+
+  Upper-left (x 80, y 20): The player's spaceship, ~300x440 pixels. A sleek, angular fighter craft pointing UPWARD with bright blue engine flames trailing below.
+  Dark hull with blue energy accents. Should look fast and agile.
+
+  Upper-right (x 420, y 50): A UFO/mothership saucer, ~480x175 pixels. A wide alien saucer with a green glowing underside beam and dark metallic hull. This is a
+  bonus target that flies across the top of the screen.
+
+  Middle (x 340, y 510): Two small projectile sprites side by side:
+  - A small green energy bolt (~28px wide × 85px tall) — the player's bullet
+  - A small orange fire bolt to its right (~150px wide × 40px tall) — alternate projectile
+
+  Lower area (x 120, y 670): Two shield/barrier blocks side by side (~175x155 each, ~60px gap between). Cyan/teal glowing crystalline energy barriers.
+
+  Bottom strip (y 840): The text "LEVEL START" on the left and "GAME OVER" to its right, and "+100" further right — all in glowing green pixel/sci-fi font, each
+  ~35px tall.
+
+  Very bottom (y 930): The digits "0 1 2 3 4 5 6 7 8 9" in a row, same glowing green sci-fi font, each digit ~30x38 pixels with ~8px spacing between them. Start at
+   x ~200.
+
+  ---
+  Prompt 4 — Bottom-Right (Powerups + Explosions)
+
+  Create a 1024x1024 pixel sprite sheet on a fully transparent background (PNG with alpha). This is the bottom-right quadrant of a larger game sprite sheet for a
+  space invaders-style iOS game. Crisp, sharp, high-res graphics with vibrant glowing effects.
+
+  Layout these sprites:
+
+  Top row (y ~35, 4 orbs in a row, each ~100x100, spaced ~140px apart starting at x ~45): 4 powerup orbs, each a glowing sphere with an icon inside:
+  - Green orb with a lightning bolt icon (rapid fire)
+  - Blue orb with a spread/fan icon (spread shot)
+  - Yellow orb with a shield icon (shield powerup)
+  - Purple orb with a heart icon (extra life)
+
+  Middle area — 2 rows of 3 explosion frames (6 total), each ~280x280:
+  Row 1 (y ~185): 3 green explosion frames — a sequence showing early, mid, and peak stages of a bright green energy explosion. Plasma bursts with sparks and
+  debris.
+  Row 2 (y ~495): 3 yellow/orange explosion frames — a warmer-colored explosion sequence (early, mid, peak). Fiery with ember particles. Used for different enemy
+  types.
+
+  Bottom row (y ~800): 3 more explosion variants (~280x200 each) — dissipating explosion frames showing the tail-end of explosions fading out with scattered sparks
+   and smoke wisps. Mix of green and orange tones.
