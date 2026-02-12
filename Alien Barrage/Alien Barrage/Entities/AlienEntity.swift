@@ -35,6 +35,8 @@ enum AlienType {
 class AlienEntity: GKEntity {
 
     let spriteComponent: SpriteComponent
+    let healthComponent: HealthComponent
+    let scoreValueComponent: ScoreValueComponent
     let alienType: AlienType
     let row: Int
     let col: Int
@@ -52,16 +54,24 @@ class AlienEntity: GKEntity {
             ?? SpriteSheet.shared.sprite(named: "\(type.spritePrefix)1")!
 
         spriteComponent = SpriteComponent(texture: texture, size: type.size)
+        healthComponent = HealthComponent(hp: type == .large ? 2 : 1)
+        scoreValueComponent = ScoreValueComponent(value: type.scoreValue)
 
         super.init()
 
         addComponent(spriteComponent)
+        addComponent(healthComponent)
+        addComponent(scoreValueComponent)
 
         let node = spriteComponent.node
         node.zPosition = GameConstants.ZPosition.enemy
         node.name = "alien"
 
-        // Physics body for collision detection (Phase 3)
+        // Store entity reference for collision lookup
+        node.userData = NSMutableDictionary()
+        node.userData?["entity"] = self
+
+        // Physics body for collision detection
         let body = SKPhysicsBody(rectangleOf: type.size)
         body.categoryBitMask = GameConstants.PhysicsCategory.enemy
         body.contactTestBitMask = GameConstants.PhysicsCategory.playerBullet
