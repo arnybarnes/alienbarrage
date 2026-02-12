@@ -16,14 +16,16 @@ class GameViewController: UIViewController {
 
         guard let skView = self.view as? SKView else { return }
 
+        skView.showsFPS = true
+        skView.showsNodeCount = true
+        skView.showsDrawCount = true
+        skView.ignoresSiblingOrder = true
+
         let scene = GameScene(size: GameConstants.sceneSize)
         scene.scaleMode = .aspectFill
         scene.anchorPoint = CGPoint(x: 0, y: 0)
 
         skView.presentScene(scene)
-        skView.ignoresSiblingOrder = true
-        skView.showsFPS = true
-        skView.showsNodeCount = true
     }
 
     override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
