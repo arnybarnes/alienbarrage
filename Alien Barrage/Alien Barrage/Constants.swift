@@ -79,6 +79,17 @@ enum GameConstants {
     static let shieldBarriersEnabled: Bool = false
     static let shieldHP: Int = 5
 
+    // MARK: - Haptic Feedback
+    struct Haptic {
+        static let playerShoot      = false
+        static let alienKilled      = false
+        static let ufoDestroyed     = false
+        static let powerupCollected = true
+        static let playerDeath      = true
+        static let levelComplete    = false
+        static let gameOver         = false
+    }
+
     // MARK: - Sound File Names
     // Empty string = sound disabled. Set to a filename (e.g. "shoot.wav") to enable.
     struct Sound {

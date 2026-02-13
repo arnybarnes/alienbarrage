@@ -183,7 +183,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnPlayerBullet() {
         AudioManager.shared.play(GameConstants.Sound.playerShoot)
-        HapticManager.shared.lightImpact()
+        if GameConstants.Haptic.playerShoot { HapticManager.shared.lightImpact() }
 
         let playerPos = playerEntity.spriteComponent.node.position
         let baseY = playerPos.y + PlayerEntity.shipSize.height / 2 + 5
@@ -376,7 +376,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if isDead {
             AudioManager.shared.play(GameConstants.Sound.enemyDeath)
-            HapticManager.shared.mediumImpact()
+            if GameConstants.Haptic.alienKilled { HapticManager.shared.mediumImpact() }
 
             alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
@@ -439,7 +439,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if isDead {
             AudioManager.shared.play(GameConstants.Sound.ufoDestroyed)
-            HapticManager.shared.mediumImpact()
+            if GameConstants.Haptic.ufoDestroyed { HapticManager.shared.mediumImpact() }
 
             let worldPos = ufoNode.position
             let scoreValue = ufo.scoreValueComponent.value
@@ -464,7 +464,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
 
         AudioManager.shared.play(GameConstants.Sound.powerupCollect)
-        HapticManager.shared.mediumImpact()
+        if GameConstants.Haptic.powerupCollected { HapticManager.shared.mediumImpact() }
 
         playerEntity.applyPowerup(powerup.type)
 
@@ -519,7 +519,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.clearPowerup()
 
         AudioManager.shared.play(GameConstants.Sound.playerDeath)
-        HapticManager.shared.heavyImpact()
+        if GameConstants.Haptic.playerDeath { HapticManager.shared.heavyImpact() }
 
         let playerPos = playerEntity.spriteComponent.node.position
         ExplosionEffect.spawn(at: playerPos, in: self, scoreValue: 0)
@@ -550,7 +550,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func showGameOverOverlay() {
         AudioManager.shared.play(GameConstants.Sound.gameOver)
-        HapticManager.shared.error()
+        if GameConstants.Haptic.gameOver { HapticManager.shared.error() }
 
         // Submit score
         let isNewHigh = scoreManager.currentScore > 0 &&
@@ -769,7 +769,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func startNextLevel() {
         AudioManager.shared.play(GameConstants.Sound.levelStart)
-        HapticManager.shared.success()
+        if GameConstants.Haptic.levelComplete { HapticManager.shared.success() }
 
         // Remove overlay
         overlayNode?.removeFromParent()
