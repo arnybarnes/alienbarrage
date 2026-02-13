@@ -280,11 +280,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.zPosition = -1
         overlay.addChild(bg)
 
-        if let gameOverTexture = SpriteSheet.shared.sprite(named: "gameOver") {
-            let gameOverSprite = SKSpriteNode(texture: gameOverTexture, size: CGSize(width: 300, height: 38))
-            gameOverSprite.position = CGPoint(x: size.width / 2, y: size.height / 2)
-            overlay.addChild(gameOverSprite)
-        }
+        let label = makeOverlayLabel(text: "GAME OVER", fontSize: 48)
+        label.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        overlay.addChild(label)
 
         addChild(overlay)
         overlayNode = overlay
@@ -361,26 +359,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.zPosition = -1
         overlay.addChild(bg)
 
-        // "LEVEL" text sprite centered (cropped from "LEVEL START")
-        if let levelTexture = SpriteSheet.shared.sprite(named: "level") {
-            let levelSprite = SKSpriteNode(texture: levelTexture, size: CGSize(width: 150, height: 44))
-            levelSprite.position = CGPoint(x: size.width / 2, y: size.height / 2 + 30)
-            overlay.addChild(levelSprite)
-        }
+        let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
+        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25)
+        overlay.addChild(levelLabel)
 
-        // Level number centered below the "LEVEL" text
-        let digits = Array(String(currentLevel))
-        let digitSize = CGSize(width: 26, height: 33)
-        let spacing: CGFloat = 30.0
-        let totalWidth = CGFloat(digits.count - 1) * spacing
-        let startX = size.width / 2 - totalWidth / 2
-        for (i, char) in digits.enumerated() {
-            guard let digit = Int(String(char)),
-                  let texture = SpriteSheet.shared.digitTexture(digit) else { continue }
-            let digitNode = SKSpriteNode(texture: texture, size: digitSize)
-            digitNode.position = CGPoint(x: startX + CGFloat(i) * spacing, y: size.height / 2 - 25)
-            overlay.addChild(digitNode)
-        }
+        let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
+        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35)
+        overlay.addChild(numberLabel)
 
         addChild(overlay)
         overlayNode = overlay
@@ -406,6 +391,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
 
         gameState = .playing
+    }
+
+    // MARK: - UI Helpers
+
+    private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
+        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        label.text = text
+        label.fontSize = fontSize
+        label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .center
+
+        // Shadow/outline effect via a duplicate label behind
+        let shadow = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        shadow.text = text
+        shadow.fontSize = fontSize
+        shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
+        shadow.horizontalAlignmentMode = .center
+        shadow.verticalAlignmentMode = .center
+        shadow.position = CGPoint(x: 2, y: -2)
+        shadow.zPosition = -1
+        label.addChild(shadow)
+
+        return label
     }
 
     // MARK: - Update
