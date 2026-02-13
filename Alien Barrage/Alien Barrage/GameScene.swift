@@ -44,6 +44,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var enemyFireTimer: TimeInterval = 0
     private var currentEnemyFireInterval: TimeInterval = GameConstants.enemyFireInterval
 
+    // UFO
+    private var ufoEntity: UFOEntity?
+    private var ufoSpawnTimer: TimeInterval = 0
+    private var nextUfoSpawnInterval: TimeInterval = 0
+
     // Overlay
     private var overlayNode: SKNode?
 
@@ -56,6 +61,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
         setupScoreDisplay()
         setupLivesDisplay()
+        nextUfoSpawnInterval = randomUFOInterval()
     }
 
     // MARK: - Setup
@@ -71,12 +77,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupAliens() {
-        let speedMultiplier: CGFloat = 1.0 + CGFloat(currentLevel - 1) * 0.15
+        let config = LevelManager.config(forLevel: currentLevel)
+        currentEnemyFireInterval = config.fireInterval
+        let speedMultiplier = config.baseSpeed / GameConstants.alienBaseSpeed
         alienFormation = AlienFormation(
-            rows: GameConstants.alienGridRows,
-            cols: GameConstants.alienGridColumns,
+            rows: config.rows,
+            cols: config.cols,
             sceneSize: size,
-            speedMultiplier: speedMultiplier
+            speedMultiplier: speedMultiplier,
+            alienHPBonus: config.alienHPBonus
         )
         addChild(alienFormation!.formationNode)
     }
@@ -191,6 +200,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             handleEnemyBulletHitsPlayer(bulletBody: bulletBody, playerBody: playerBody)
             return
         }
+
+        // Player bullet hits UFO
+        if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.ufo) ||
+           (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.ufo) {
+            let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
+            let ufoBody = maskA == GameConstants.PhysicsCategory.ufo ? bodyA : bodyB
+            handlePlayerBulletHitsUFO(bulletBody: bulletBody, ufoBody: ufoBody)
+            return
+        }
     }
 
     private func handlePlayerBulletHitsEnemy(bulletBody: SKPhysicsBody, alienBody: SKPhysicsBody) {
@@ -244,6 +262,31 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
+    private func handlePlayerBulletHitsUFO(bulletBody: SKPhysicsBody, ufoBody: SKPhysicsBody) {
+        guard gameState == .playing else { return }
+        guard let bulletNode = bulletBody.node as? SKSpriteNode,
+              let ufoNode = ufoBody.node as? SKSpriteNode else { return }
+
+        guard let ufo = ufoNode.userData?["entity"] as? UFOEntity else { return }
+
+        let isDead = ufo.healthComponent.takeDamage(1)
+
+        if isDead {
+            let worldPos = ufoNode.position
+            let scoreValue = ufo.scoreValueComponent.value
+            ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreValue)
+            scoreManager.addPoints(scoreValue)
+            ufoNode.removeFromParent()
+            ufoEntity = nil
+        } else {
+            let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
+            let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
+            ufoNode.run(SKAction.sequence([colorize, restore]))
+        }
+
+        bulletNode.removeFromParent()
+    }
+
     // MARK: - Player Death & Game Over
 
     private func handlePlayerDeath() {
@@ -254,8 +297,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ExplosionEffect.spawn(at: playerPos, in: self, scoreValue: 0)
         playerEntity.spriteComponent.node.isHidden = true
 
-        // Hide formation and remove lingering bullets
+        // Hide formation and remove lingering bullets/UFO
         alienFormation?.formationNode.isHidden = true
+        removeUFO()
         enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
@@ -308,10 +352,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         alienFormation?.formationNode.removeFromParent()
         alienFormation = nil
 
+        // Remove UFO if active
+        removeUFO()
+
         // Reset state
         currentLevel = 1
         currentEnemyFireInterval = GameConstants.enemyFireInterval
         enemyFireTimer = 0
+        ufoSpawnTimer = 0
+        nextUfoSpawnInterval = randomUFOInterval()
         gameState = .playing
         scoreManager.reset()
 
@@ -323,6 +372,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Level Progression
 
+    private func checkAliensReachedBottom() {
+        guard gameState == .playing,
+              let formation = alienFormation,
+              let lowestY = formation.lowestAlienY() else { return }
+
+        let playerY = playerEntity.spriteComponent.node.position.y
+        if lowestY <= playerY {
+            handlePlayerDeath()
+        }
+    }
+
     private func checkLevelComplete() {
         guard gameState == .playing,
               let formation = alienFormation,
@@ -332,7 +392,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentLevel += 1
         playerEntity.shootingComponent.isFiring = false
 
-        // Clean up lingering bullets
+        // Clean up UFO and lingering bullets
+        removeUFO()
         enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
@@ -380,17 +441,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         alienFormation?.formationNode.removeFromParent()
         alienFormation = nil
 
-        // Update difficulty
-        currentEnemyFireInterval = max(0.8, 2.0 - Double(currentLevel - 1) * 0.2)
+        // Reset timers
         enemyFireTimer = 0
+        ufoSpawnTimer = 0
+        nextUfoSpawnInterval = randomUFOInterval()
 
-        // Create new formation with speed multiplier
+        // Create new formation (setupAliens uses LevelManager)
         setupAliens()
 
         // Reset player position
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
 
         gameState = .playing
+    }
+
+    // MARK: - UFO
+
+    private func randomUFOInterval() -> TimeInterval {
+        TimeInterval.random(in: GameConstants.ufoSpawnIntervalMin...GameConstants.ufoSpawnIntervalMax)
+    }
+
+    private func spawnUFO() {
+        guard ufoEntity == nil else { return }
+
+        let ufo = UFOEntity(sceneSize: size)
+        addChild(ufo.spriteComponent.node)
+        entities.append(ufo)
+        ufoEntity = ufo
+    }
+
+    private func removeUFO() {
+        ufoEntity?.spriteComponent.node.removeFromParent()
+        ufoEntity = nil
     }
 
     // MARK: - UI Helpers
@@ -439,6 +521,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 enemyFireTimer = 0
                 spawnEnemyBullet()
             }
+
+            // UFO spawn timer
+            ufoSpawnTimer += dt
+            if ufoSpawnTimer >= nextUfoSpawnInterval {
+                ufoSpawnTimer = 0
+                nextUfoSpawnInterval = randomUFOInterval()
+                spawnUFO()
+            }
+
+            // Track UFO removal (flew off-screen)
+            if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
+                ufoEntity = nil
+            }
+
+            // Check if aliens reached the bottom (instant game over)
+            checkAliensReachedBottom()
 
             // Check level completion
             checkLevelComplete()

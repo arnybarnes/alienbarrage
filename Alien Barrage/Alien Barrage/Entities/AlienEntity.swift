@@ -18,9 +18,10 @@ enum AlienType {
     }
 
     var size: CGSize {
+        // Sizes preserve average source aspect ratio per type
         switch self {
-        case .large: return CGSize(width: 45, height: 50)
-        case .small: return CGSize(width: 40, height: 40)
+        case .large: return CGSize(width: 46, height: 54)   // source avg ~185×214
+        case .small: return CGSize(width: 48, height: 40)   // source avg ~206×170
         }
     }
 
@@ -42,7 +43,7 @@ class AlienEntity: GKEntity {
     let col: Int
     var isAlive: Bool = true
 
-    init(type: AlienType, row: Int, col: Int) {
+    init(type: AlienType, row: Int, col: Int, hpBonus: Int = 0) {
         self.alienType = type
         self.row = row
         self.col = col
@@ -53,8 +54,9 @@ class AlienEntity: GKEntity {
         let texture = SpriteSheet.shared.sprite(named: spriteName)
             ?? SpriteSheet.shared.sprite(named: "\(type.spritePrefix)1")!
 
+        let baseHP = type == .large ? 2 : 1
         spriteComponent = SpriteComponent(texture: texture, size: type.size)
-        healthComponent = HealthComponent(hp: type == .large ? 2 : 1)
+        healthComponent = HealthComponent(hp: baseHP + hpBonus)
         scoreValueComponent = ScoreValueComponent(value: type.scoreValue)
 
         super.init()

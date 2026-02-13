@@ -22,6 +22,7 @@ class AlienFormation {
     private let baseSpeed: CGFloat
     private let totalAliens: Int
     private let sceneWidth: CGFloat
+    private var justReversed: Bool = false
 
     var aliveCount: Int {
         aliens.flatMap { $0 }.compactMap { $0 }.filter { $0.isAlive }.count
@@ -31,7 +32,7 @@ class AlienFormation {
         aliveCount == 0
     }
 
-    init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0) {
+    init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0, alienHPBonus: Int = 0) {
         self.rows = rows
         self.cols = cols
         self.sceneWidth = sceneSize.width
@@ -41,6 +42,16 @@ class AlienFormation {
         self.formationNode = SKNode()
         self.aliens = []
 
+        // Calculate spacing that ensures the formation fits with room to move.
+        // Available width = sceneWidth minus edge margins minus largest alien width minus movement buffer.
+        let edgeMargin: CGFloat = 10.0
+        let maxAlienHalfWidth: CGFloat = max(AlienType.large.size.width, AlienType.small.size.width) / 2.0
+        let movementBuffer: CGFloat = 40.0
+        let maxGridWidth = sceneSize.width - 2 * (edgeMargin + maxAlienHalfWidth) - movementBuffer
+        let spacingX: CGFloat = cols > 1
+            ? min(GameConstants.alienSpacingX, maxGridWidth / CGFloat(cols - 1))
+            : 0
+
         // Build the grid
         var grid: [[AlienEntity?]] = []
         for row in 0..<rows {
@@ -49,10 +60,10 @@ class AlienFormation {
             let type: AlienType = row < 2 ? .large : .small
 
             for col in 0..<cols {
-                let alien = AlienEntity(type: type, row: row, col: col)
+                let alien = AlienEntity(type: type, row: row, col: col, hpBonus: alienHPBonus)
 
                 // Position within the formation (row 0 = top)
-                let x = CGFloat(col) * GameConstants.alienSpacingX
+                let x = CGFloat(col) * spacingX
                 let y = -CGFloat(row) * GameConstants.alienSpacingY
                 alien.spriteComponent.node.position = CGPoint(x: x, y: y)
 
@@ -64,7 +75,7 @@ class AlienFormation {
         self.aliens = grid
 
         // Center the formation horizontally
-        let gridWidth = CGFloat(cols - 1) * GameConstants.alienSpacingX
+        let gridWidth = CGFloat(cols - 1) * spacingX
         let startX = (sceneSize.width - gridWidth) / 2.0
         let startY = sceneSize.height - 160
 
@@ -77,10 +88,14 @@ class AlienFormation {
         // Move horizontally
         formationNode.position.x += speed * direction * CGFloat(dt)
 
-        // Check if any alive alien has reached the screen edge
-        if shouldReverseDirection() {
+        // Check if any alive alien has reached the screen edge.
+        // Skip check for one frame after reversing to prevent rapid re-triggers.
+        if justReversed {
+            justReversed = false
+        } else if shouldReverseDirection() {
             direction *= -1
             formationNode.position.y -= GameConstants.alienStepDown
+            justReversed = true
         }
     }
 
