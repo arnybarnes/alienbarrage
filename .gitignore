@@ -44,6 +44,9 @@ playground.xcworkspace
 frame_*.png
 *.mov
 
+# Debug sprite exports
+.debug-sprites/
+
 # OS files
 .DS_Store
 .DS_Store?

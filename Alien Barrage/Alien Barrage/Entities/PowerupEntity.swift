@@ -30,6 +30,24 @@ enum PowerupType: CaseIterable {
         }
     }
 
+    var spinCycleDuration: TimeInterval {
+        switch self {
+        case .rapidFire:  return 0.75
+        case .spreadShot: return 0.95
+        case .shield:     return 1.10
+        case .extraLife:  return 0.85
+        }
+    }
+
+    var spinDirection: CGFloat {
+        switch self {
+        case .rapidFire, .shield:
+            return 1.0
+        case .spreadShot, .extraLife:
+            return -1.0
+        }
+    }
+
     static func random() -> PowerupType {
         allCases.randomElement()!
     }
@@ -71,6 +89,25 @@ class PowerupEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
+        // Fake 3D spin: animate width projection with perspective-like squash/brighten.
+        let cycleDuration = type.spinCycleDuration
+        let phaseOffset = CGFloat.random(in: 0...(2 * .pi))
+        let fake3DSpin = SKAction.customAction(withDuration: cycleDuration) { [spinDirection = type.spinDirection] node, elapsed in
+            let t = CGFloat(elapsed) / CGFloat(cycleDuration)
+            let angle = phaseOffset + spinDirection * t * 2 * .pi
+
+            var projectedWidth = cos(angle)
+            if abs(projectedWidth) < 0.08 {
+                projectedWidth = 0.08 * (projectedWidth >= 0 ? 1 : -1)
+            }
+
+            let facing = abs(projectedWidth)
+            node.xScale = projectedWidth
+            node.yScale = 0.90 + 0.10 * facing
+            node.alpha = 0.72 + 0.28 * facing
+        }
+        node.run(SKAction.repeatForever(fake3DSpin), withKey: "powerupSpin3D")
+
         // Fall downward
         let distance = position.y + PowerupEntity.powerupSize.height
         let duration = TimeInterval(distance / GameConstants.powerupFallSpeed)
@@ -78,12 +115,6 @@ class PowerupEntity: GKEntity {
         let remove = SKAction.removeFromParent()
         node.run(SKAction.sequence([moveDown, remove]))
 
-        // Subtle pulse animation
-        let scaleUp = SKAction.scale(to: 1.15, duration: 0.4)
-        let scaleDown = SKAction.scale(to: 1.0, duration: 0.4)
-        scaleUp.timingMode = .easeInEaseOut
-        scaleDown.timingMode = .easeInEaseOut
-        node.run(SKAction.repeatForever(SKAction.sequence([scaleUp, scaleDown])))
     }
 
     @MainActor required init?(coder: NSCoder) {
