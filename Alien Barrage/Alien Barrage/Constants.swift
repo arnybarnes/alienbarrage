@@ -63,8 +63,8 @@ enum GameConstants {
     static let ufoSpeed: CGFloat = 100.0
     static let ufoHP: Int = 3
     static let ufoScoreValue: Int = 500
-    static let ufoSpawnIntervalMin: TimeInterval = 20.0
-    static let ufoSpawnIntervalMax: TimeInterval = 40.0
+    static let ufoSpawnIntervalMin: TimeInterval = 10.0
+    static let ufoSpawnIntervalMax: TimeInterval = 25.0
 
     // MARK: - Scoring
     static let alienSmallScore: Int = 100
@@ -78,6 +78,17 @@ enum GameConstants {
     // MARK: - Shield Barriers
     static let shieldBarriersEnabled: Bool = false
     static let shieldHP: Int = 5
+
+    // MARK: - Haptic Feedback
+    struct Haptic {
+        static let playerShoot      = false
+        static let alienKilled      = false
+        static let ufoDestroyed     = false
+        static let powerupCollected = true
+        static let playerDeath      = true
+        static let levelComplete    = false
+        static let gameOver         = false
+    }
 
     // MARK: - Sound File Names
     // Empty string = sound disabled. Set to a filename (e.g. "shoot.wav") to enable.

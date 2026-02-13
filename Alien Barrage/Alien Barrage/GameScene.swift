@@ -21,6 +21,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private var lastUpdateTime: TimeInterval = 0
 
+    // Settings & callbacks
+    private var settings: GameSettings?
+    var onGameOver: ((Int) -> Void)?
+
     // World node — all gameplay objects are children of this (allows screen shake without shaking UI)
     private var worldNode: SKNode!
 
@@ -35,6 +39,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Scoring
     private let scoreManager = ScoreManager()
     private var scoreDisplay: ScoreDisplay!
+    var currentScore: Int { scoreManager.currentScore }
 
     // Game state
     private var gameState: GameState = .playing
@@ -58,6 +63,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Overlay
     private var overlayNode: SKNode?
 
+    convenience init(size: CGSize, settings: GameSettings) {
+        self.init(size: size)
+        self.settings = settings
+    }
+
     override func didMove(to view: SKView) {
         backgroundColor = .black
         physicsWorld.gravity = .zero
@@ -77,24 +87,50 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupScoreDisplay()
         setupLivesDisplay()
         nextUfoSpawnInterval = randomUFOInterval()
+
+        // Pause on background
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appWillResignActive),
+            name: UIApplication.willResignActiveNotification, object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self, selector: #selector(appDidBecomeActive),
+            name: UIApplication.didBecomeActiveNotification, object: nil
+        )
+    }
+
+    @objc private func appWillResignActive() {
+        if gameState == .playing {
+            isPaused = true
+        }
+    }
+
+    @objc private func appDidBecomeActive() {
+        isPaused = false
     }
 
     // MARK: - Setup
 
     private func setupPlayer() {
-        playerEntity = PlayerEntity(sceneSize: size)
+        let lives = settings?.effectiveLives ?? GameConstants.playerLives
+        let fireRate = settings?.effectiveFireRate ?? GameConstants.playerFireRate
+        playerEntity = PlayerEntity(sceneSize: size, lives: lives, fireRate: fireRate)
         worldNode.addChild(playerEntity.spriteComponent.node)
         entities.append(playerEntity)
 
         playerEntity.shootingComponent.fireCallback = { [weak self] in
             self?.spawnPlayerBullet()
         }
+
+        playerEntity.shootingComponent.isFiring = true
     }
 
     private func setupAliens() {
         let config = LevelManager.config(forLevel: currentLevel)
-        currentEnemyFireInterval = config.fireInterval
-        let speedMultiplier = config.baseSpeed / GameConstants.alienBaseSpeed
+        let fireIntervalMult = settings?.effectiveEnemyFireIntervalMultiplier ?? 1.0
+        currentEnemyFireInterval = config.fireInterval * fireIntervalMult
+        let speedMult = settings?.effectiveAlienSpeedMultiplier ?? 1.0
+        let speedMultiplier = (config.baseSpeed / GameConstants.alienBaseSpeed) * speedMult
         alienFormation = AlienFormation(
             rows: config.rows,
             cols: config.cols,
@@ -117,7 +153,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupLivesDisplay() {
         livesDisplay = LivesDisplay()
         addChild(livesDisplay.node)  // UI stays on scene, not worldNode
-        livesDisplay.update(lives: GameConstants.playerLives)
+        let lives = settings?.effectiveLives ?? GameConstants.playerLives
+        livesDisplay.update(lives: lives)
     }
 
     private func setupShieldBarriers() {
@@ -145,6 +182,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Bullet Spawning
 
     private func spawnPlayerBullet() {
+        AudioManager.shared.play(GameConstants.Sound.playerShoot)
+        if GameConstants.Haptic.playerShoot { HapticManager.shared.lightImpact() }
+
         let playerPos = playerEntity.spriteComponent.node.position
         let baseY = playerPos.y + PlayerEntity.shipSize.height / 2 + 5
 
@@ -216,7 +256,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if gameState == .gameOver {
-            restartGame()
+            handleGameOverTap()
             return
         }
         guard gameState == .playing else { return }
@@ -224,7 +264,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first else { return }
         touchStartLocation = touch.location(in: self)
         playerStartX = playerEntity.spriteComponent.node.position.x
-        playerEntity.shootingComponent.isFiring = true
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -238,13 +277,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard gameState == .playing else { return }
         touchStartLocation = nil
-        playerEntity.shootingComponent.isFiring = false
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         guard gameState == .playing else { return }
         touchStartLocation = nil
-        playerEntity.shootingComponent.isFiring = false
+    }
+
+    private func handleGameOverTap() {
+        HighScoreManager.shared.submit(score: scoreManager.currentScore)
+        if let callback = onGameOver {
+            callback(scoreManager.currentScore)
+        } else {
+            restartGame()
+        }
     }
 
     // MARK: - Physics Contact
@@ -329,6 +375,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene!)
 
         if isDead {
+            AudioManager.shared.play(GameConstants.Sound.enemyDeath)
+            if GameConstants.Haptic.alienKilled { HapticManager.shared.mediumImpact() }
+
             alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
             let scoreValue = alienEntity.scoreValueComponent.value
@@ -360,10 +409,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Shield powerup absorbs the hit
         if playerEntity.hasShield {
+            AudioManager.shared.play(GameConstants.Sound.shieldHit)
             playerEntity.clearPowerup()
             return
         }
 
+        AudioManager.shared.play(GameConstants.Sound.playerHit)
         let isDead = playerEntity.healthComponent.takeDamage(1)
         livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
 
@@ -387,6 +438,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let isDead = ufo.healthComponent.takeDamage(1)
 
         if isDead {
+            AudioManager.shared.play(GameConstants.Sound.ufoDestroyed)
+            if GameConstants.Haptic.ufoDestroyed { HapticManager.shared.mediumImpact() }
+
             let worldPos = ufoNode.position
             let scoreValue = ufo.scoreValueComponent.value
             ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreValue)
@@ -394,9 +448,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             ufoNode.removeFromParent()
             ufoEntity = nil
         } else {
-            let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
-            let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
-            ufoNode.run(SKAction.sequence([colorize, restore]))
+            let blink = SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.2, duration: 0.05),
+                SKAction.fadeAlpha(to: 1.0, duration: 0.1)
+            ])
+            ufoNode.run(blink)
         }
 
         bulletNode.removeFromParent()
@@ -406,6 +462,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard gameState == .playing else { return }
         guard let powerupNode = powerupBody.node as? SKSpriteNode,
               let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
+
+        AudioManager.shared.play(GameConstants.Sound.powerupCollect)
+        if GameConstants.Haptic.powerupCollected { HapticManager.shared.mediumImpact() }
 
         playerEntity.applyPowerup(powerup.type)
 
@@ -427,6 +486,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let bulletNode = bulletBody.node,
               let shieldNode = shieldBody.node as? SKSpriteNode,
               let barrier = shieldNode.userData?["entity"] as? ShieldBarrierEntity else { return }
+
+        AudioManager.shared.play(GameConstants.Sound.shieldHit)
 
         // Spark effect at impact
         ParticleEffects.spawnSparkBurst(at: bulletNode.position, in: self)
@@ -457,6 +518,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.shootingComponent.isFiring = false
         playerEntity.clearPowerup()
 
+        AudioManager.shared.play(GameConstants.Sound.playerDeath)
+        if GameConstants.Haptic.playerDeath { HapticManager.shared.heavyImpact() }
+
         let playerPos = playerEntity.spriteComponent.node.position
         ExplosionEffect.spawn(at: playerPos, in: self, scoreValue: 0)
         playerEntity.spriteComponent.node.isHidden = true
@@ -485,6 +549,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func showGameOverOverlay() {
+        AudioManager.shared.play(GameConstants.Sound.gameOver)
+        if GameConstants.Haptic.gameOver { HapticManager.shared.error() }
+
+        // Submit score
+        let isNewHigh = scoreManager.currentScore > 0 &&
+                        scoreManager.currentScore > HighScoreManager.shared.highScore
+        HighScoreManager.shared.submit(score: scoreManager.currentScore)
+
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
@@ -495,8 +567,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         overlay.addChild(bg)
 
         let label = makeOverlayLabel(text: "GAME OVER", fontSize: 48)
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40)
         overlay.addChild(label)
+
+        let scoreLabel = makeOverlayLabel(text: "SCORE: \(scoreManager.currentScore)", fontSize: 28)
+        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20)
+        overlay.addChild(scoreLabel)
+
+        if isNewHigh {
+            let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
+            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60)
+            overlay.addChild(highLabel)
+        }
+
+        let tapLabel = makeOverlayLabel(text: "TAP TO CONTINUE", fontSize: 20)
+        tapLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110)
+        tapLabel.alpha = 0.6
+        tapLabel.run(SKAction.repeatForever(
+            SKAction.sequence([
+                SKAction.fadeAlpha(to: 1.0, duration: 0.8),
+                SKAction.fadeAlpha(to: 0.4, duration: 0.8)
+            ])
+        ))
+        overlay.addChild(tapLabel)
 
         addChild(overlay)
         overlayNode = overlay
@@ -544,7 +637,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupPlayer()
         setupAliens()
         setupShieldBarriers()
-        livesDisplay.update(lives: GameConstants.playerLives)
+        let lives = settings?.effectiveLives ?? GameConstants.playerLives
+        livesDisplay.update(lives: lives)
     }
 
     // MARK: - Level Progression
@@ -570,35 +664,84 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.shootingComponent.isFiring = false
         playerEntity.clearPowerup()
 
-        // Clean up UFO, lingering bullets, and powerups
-        removeUFO()
+        // Remove enemy bullets immediately — no reason to let them kill the player after clearing
         worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
-        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
-        }
-        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
-            node.removeFromParent()
+
+        // Wait for remaining player bullets, UFO, and powerups to finish
+        waitForClearThenShowLevel()
+    }
+
+    private func waitForClearThenShowLevel() {
+        let checkAction = SKAction.run { [weak self] in
+            guard let self else { return }
+
+            var remaining = false
+            worldNode.enumerateChildNodes(withName: "playerBullet") { _, stop in
+                remaining = true
+                stop.pointee = true
+            }
+            if !remaining {
+                worldNode.enumerateChildNodes(withName: "powerup") { _, stop in
+                    remaining = true
+                    stop.pointee = true
+                }
+            }
+            if !remaining && ufoEntity != nil {
+                remaining = true
+            }
+
+            if !remaining {
+                self.removeAction(forKey: "waitForClear")
+                self.removeUFO()
+                self.showLevelOverlay()
+
+                let wait = SKAction.wait(forDuration: 2.5)
+                let startNext = SKAction.run { [weak self] in
+                    self?.startNextLevel()
+                }
+                self.run(SKAction.sequence([wait, startNext]))
+            }
         }
 
-        showLevelOverlay()
+        let poll = SKAction.sequence([SKAction.wait(forDuration: 0.1), checkAction])
+        run(SKAction.repeatForever(poll), withKey: "waitForClear")
 
-        let wait = SKAction.wait(forDuration: 2.0)
-        let startNext = SKAction.run { [weak self] in
-            self?.startNextLevel()
-        }
-        run(SKAction.sequence([wait, startNext]))
+        // Safety timeout — don't wait forever
+        let timeout = SKAction.sequence([
+            SKAction.wait(forDuration: 3.0),
+            SKAction.run { [weak self] in
+                guard let self, self.overlayNode == nil else { return }
+                self.removeAction(forKey: "waitForClear")
+                self.removeUFO()
+                worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+                    node.removeFromParent()
+                }
+                worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
+                    node.removeFromParent()
+                }
+                self.showLevelOverlay()
+                let wait = SKAction.wait(forDuration: 2.5)
+                let startNext = SKAction.run { [weak self] in
+                    self?.startNextLevel()
+                }
+                self.run(SKAction.sequence([wait, startNext]))
+            }
+        ])
+        run(timeout, withKey: "waitForClearTimeout")
     }
 
     private func showLevelOverlay() {
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
-        // Semi-transparent background (z=-1 so text renders on top)
-        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.5), size: size)
+        // Semi-transparent background fades in
+        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.0), size: size)
         bg.position = CGPoint(x: size.width / 2, y: size.height / 2)
         bg.zPosition = -1
+        bg.run(SKAction.colorize(with: .black, colorBlendFactor: 1.0, duration: 0.0))
+        bg.run(SKAction.fadeAlpha(to: 0.5, duration: 0.3))
         overlay.addChild(bg)
 
         let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
@@ -609,11 +752,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35)
         overlay.addChild(numberLabel)
 
+        // Bounce-in animation for text
+        for label in [levelLabel, numberLabel] {
+            label.setScale(0.0)
+            label.run(SKAction.sequence([
+                SKAction.scale(to: 1.2, duration: 0.25),
+                SKAction.scale(to: 0.9, duration: 0.1),
+                SKAction.scale(to: 1.05, duration: 0.08),
+                SKAction.scale(to: 1.0, duration: 0.07)
+            ]))
+        }
+
         addChild(overlay)
         overlayNode = overlay
     }
 
     private func startNextLevel() {
+        AudioManager.shared.play(GameConstants.Sound.levelStart)
+        if GameConstants.Haptic.levelComplete { HapticManager.shared.success() }
+
         // Remove overlay
         overlayNode?.removeFromParent()
         overlayNode = nil
@@ -637,6 +794,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
 
         gameState = .playing
+
+        playerEntity.shootingComponent.isFiring = true
     }
 
     // MARK: - UFO
@@ -647,6 +806,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnUFO() {
         guard ufoEntity == nil else { return }
+
+        AudioManager.shared.play(GameConstants.Sound.ufoAppear)
 
         let ufo = UFOEntity(sceneSize: size)
         worldNode.addChild(ufo.spriteComponent.node)

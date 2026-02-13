@@ -99,7 +99,45 @@
 ---
 
 ## Phase 6: Powerups, Shields, & Visual Polish
-**Status:** Pending
+**Status:** Complete
+**Date:** 2026-02-12
+
+**What was done:**
+- Created `PowerupEntity.swift` — 4 powerup types (rapid fire, spread shot, shield, extra life) with drop animations
+- Created `ShieldBarrierEntity.swift` — destructible barriers with visual degradation
+- Created `ParticleEffects.swift` — starfield background, engine thrust, spark bursts
+- Created `ScreenShakeEffect.swift` — camera shake on player death
+- Integrated powerup collection, shield barriers, and visual effects into GameScene
+- Powerups drop from destroyed aliens at 15% chance
+
+**Test criteria:** Starfield background, shield barriers take damage, powerups drop and can be collected, screen shake on death, particle effects on impacts.
+
+---
 
 ## Phase 7: SwiftUI Menus, Settings, Audio, High Scores, & Final Polish
-**Status:** Pending
+**Status:** Complete
+**Date:** 2026-02-13
+
+**What was done:**
+- Replaced UIKit entry point (AppDelegate + Main.storyboard + GameViewController) with SwiftUI @main App
+- Created `GameSettings.swift` — ObservableObject with UserDefaults persistence for difficulty, autofire, autofire speed
+- Created `HighScoreManager.swift` — singleton, UserDefaults-backed top 10 scores
+- Created `HapticManager.swift` — singleton wrapping UIFeedbackGenerators (light/medium/heavy/success/error)
+- Created `AudioManager.swift` — singleton with no-op play() (all sound filenames empty for now)
+- Created `Views/AlienBarrageApp.swift` — @main SwiftUI App struct
+- Created `Views/ContentView.swift` — state-driven navigation (menu/playing/settings/instructions)
+- Created `Views/MenuView.swift` — title screen with pulsing title, high score, start/settings/instructions buttons
+- Created `Views/SettingsView.swift` — difficulty picker, fire speed slider
+- Created `Views/InstructionsView.swift` — how-to-play with controls, scoring, real powerup sprite images
+- Created `Views/GameContainerView.swift` — wraps SpriteView, creates GameScene with settings, exit X button
+- Modified `PlayerEntity.swift` — configurable lives and fire rate parameters
+- Modified `GameScene.swift` — settings integration, onGameOver callback, always-autofire, difficulty scaling, audio/haptic hooks, enhanced game over overlay with score/high score, pause on background
+- Modified `SpriteSheet.swift` — added uiImage(named:) for SwiftUI sprite rendering
+- Deleted AppDelegate.swift, Main.storyboard, GameViewController.swift
+- Removed INFOPLIST_KEY_UIMainStoryboardFile from project.pbxproj
+- Game always autofires (no manual mode); fire speed adjustable in settings
+- Level transition waits for remaining bullets/UFO/powerups to clear before showing overlay
+- Level overlay text has bounce-in animation (scale overshoot + settle)
+- Exit button (X) in top-right corner of game returns to menu
+
+**Test criteria:** Full SwiftUI flow (Menu → Game → Game Over → Menu). Settings persist. High scores persist. Always autofire with adjustable speed. Difficulty affects gameplay. Haptics fire on events. Game pauses on background. Exit button returns to menu mid-game. Level transition waits for screen to clear, text bounces in.
