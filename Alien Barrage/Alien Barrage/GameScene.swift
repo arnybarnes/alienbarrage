@@ -21,6 +21,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private var lastUpdateTime: TimeInterval = 0
 
+    // World node — all gameplay objects are children of this (allows screen shake without shaking UI)
+    private var worldNode: SKNode!
+
     // Player
     private var playerEntity: PlayerEntity!
     private var touchStartLocation: CGPoint?
@@ -49,6 +52,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var ufoSpawnTimer: TimeInterval = 0
     private var nextUfoSpawnInterval: TimeInterval = 0
 
+    // Shield barriers
+    private var shieldBarriers: [ShieldBarrierEntity] = []
+
     // Overlay
     private var overlayNode: SKNode?
 
@@ -57,8 +63,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
 
+        // World node holds all gameplay objects
+        worldNode = SKNode()
+        addChild(worldNode)
+
+        // Starfield background
+        let starfield = ParticleEffects.createStarfield(sceneSize: size)
+        addChild(starfield)
+
         setupPlayer()
         setupAliens()
+        setupShieldBarriers()
         setupScoreDisplay()
         setupLivesDisplay()
         nextUfoSpawnInterval = randomUFOInterval()
@@ -68,7 +83,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func setupPlayer() {
         playerEntity = PlayerEntity(sceneSize: size)
-        addChild(playerEntity.spriteComponent.node)
+        worldNode.addChild(playerEntity.spriteComponent.node)
         entities.append(playerEntity)
 
         playerEntity.shootingComponent.fireCallback = { [weak self] in
@@ -87,12 +102,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             speedMultiplier: speedMultiplier,
             alienHPBonus: config.alienHPBonus
         )
-        addChild(alienFormation!.formationNode)
+        worldNode.addChild(alienFormation!.formationNode)
     }
 
     private func setupScoreDisplay() {
         scoreDisplay = ScoreDisplay()
-        addChild(scoreDisplay.node)
+        addChild(scoreDisplay.node)  // UI stays on scene, not worldNode
 
         scoreManager.onScoreChanged = { [weak self] score in
             self?.scoreDisplay.update(score: score)
@@ -101,17 +116,64 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func setupLivesDisplay() {
         livesDisplay = LivesDisplay()
-        addChild(livesDisplay.node)
+        addChild(livesDisplay.node)  // UI stays on scene, not worldNode
         livesDisplay.update(lives: GameConstants.playerLives)
     }
 
+    private func setupShieldBarriers() {
+        // Remove any existing barriers
+        for barrier in shieldBarriers {
+            barrier.spriteComponent.node.removeFromParent()
+        }
+        shieldBarriers.removeAll()
+
+        guard GameConstants.shieldBarriersEnabled else { return }
+
+        let barrierCount = 4
+        let spacing = size.width / CGFloat(barrierCount + 1)
+        let yPosition: CGFloat = 200
+
+        for i in 1...barrierCount {
+            let xPos = spacing * CGFloat(i)
+            let barrier = ShieldBarrierEntity(position: CGPoint(x: xPos, y: yPosition))
+            worldNode.addChild(barrier.spriteComponent.node)
+            entities.append(barrier)
+            shieldBarriers.append(barrier)
+        }
+    }
+
+    // MARK: - Bullet Spawning
+
     private func spawnPlayerBullet() {
         let playerPos = playerEntity.spriteComponent.node.position
-        let bulletPos = CGPoint(x: playerPos.x, y: playerPos.y + PlayerEntity.shipSize.height / 2 + 5)
+        let baseY = playerPos.y + PlayerEntity.shipSize.height / 2 + 5
 
-        let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
-        addChild(bullet.spriteComponent.node)
-        entities.append(bullet)
+        if playerEntity.activePowerup == .spreadShot {
+            // Fire 3 bullets in a fan pattern
+            let angles: [CGFloat] = [-0.25, 0, 0.25]  // ~14 degrees
+            for angle in angles {
+                let bulletPos = CGPoint(x: playerPos.x, y: baseY)
+                let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
+                let node = bullet.spriteComponent.node
+
+                // Replace the default straight-up action with angled movement
+                node.removeAllActions()
+                let distance = size.height - bulletPos.y + ProjectileEntity.bulletSize.height
+                let duration = TimeInterval(distance / GameConstants.playerBulletSpeed)
+                let dx = sin(angle) * distance
+                let move = SKAction.moveBy(x: dx, y: distance, duration: duration)
+                let remove = SKAction.removeFromParent()
+                node.run(SKAction.sequence([move, remove]))
+
+                worldNode.addChild(node)
+                entities.append(bullet)
+            }
+        } else {
+            let bulletPos = CGPoint(x: playerPos.x, y: baseY)
+            let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
+            worldNode.addChild(bullet.spriteComponent.node)
+            entities.append(bullet)
+        }
     }
 
     // MARK: - Enemy Shooting
@@ -133,12 +195,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Convert alien position to world coordinates
         let alienLocalPos = shooter.spriteComponent.node.position
-        let worldPos = formation.formationNode.convert(alienLocalPos, to: self)
+        let worldPos = formation.formationNode.convert(alienLocalPos, to: worldNode)
         let bulletPos = CGPoint(x: worldPos.x, y: worldPos.y - shooter.alienType.size.height / 2 - 5)
 
         let bullet = EnemyProjectileEntity(position: bulletPos, sceneHeight: size.height)
-        addChild(bullet.spriteComponent.node)
+        worldNode.addChild(bullet.spriteComponent.node)
         entities.append(bullet)
+    }
+
+    // MARK: - Powerup Spawning
+
+    private func spawnPowerup(at position: CGPoint) {
+        let type = PowerupType.random()
+        let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
+        worldNode.addChild(powerup.spriteComponent.node)
+        entities.append(powerup)
     }
 
     // MARK: - Touch Handling
@@ -209,7 +280,35 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             handlePlayerBulletHitsUFO(bulletBody: bulletBody, ufoBody: ufoBody)
             return
         }
+
+        // Player collects powerup
+        if (maskA == GameConstants.PhysicsCategory.player && maskB == GameConstants.PhysicsCategory.powerup) ||
+           (maskB == GameConstants.PhysicsCategory.player && maskA == GameConstants.PhysicsCategory.powerup) {
+            let powerupBody = maskA == GameConstants.PhysicsCategory.powerup ? bodyA : bodyB
+            handlePlayerCollectsPowerup(powerupBody: powerupBody)
+            return
+        }
+
+        // Player bullet hits shield barrier
+        if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.shield) ||
+           (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.shield) {
+            let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
+            let shieldBody = maskA == GameConstants.PhysicsCategory.shield ? bodyA : bodyB
+            handleBulletHitsShield(bulletBody: bulletBody, shieldBody: shieldBody)
+            return
+        }
+
+        // Enemy bullet hits shield barrier
+        if (maskA == GameConstants.PhysicsCategory.enemyBullet && maskB == GameConstants.PhysicsCategory.shield) ||
+           (maskB == GameConstants.PhysicsCategory.enemyBullet && maskA == GameConstants.PhysicsCategory.shield) {
+            let bulletBody = maskA == GameConstants.PhysicsCategory.enemyBullet ? bodyA : bodyB
+            let shieldBody = maskA == GameConstants.PhysicsCategory.shield ? bodyA : bodyB
+            handleBulletHitsShield(bulletBody: bulletBody, shieldBody: shieldBody)
+            return
+        }
     }
+
+    // MARK: - Collision Handlers
 
     private func handlePlayerBulletHitsEnemy(bulletBody: SKPhysicsBody, alienBody: SKPhysicsBody) {
         guard gameState == .playing else { return }
@@ -220,19 +319,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let isDead = alienEntity.healthComponent.takeDamage(1)
 
-        if isDead {
-            let worldPos: CGPoint
-            if let formationNode = alienNode.parent {
-                worldPos = formationNode.convert(alienNode.position, to: self)
-            } else {
-                worldPos = alienNode.position
-            }
+        // Spark effect at impact
+        let impactPos: CGPoint
+        if let formationNode = alienNode.parent {
+            impactPos = formationNode.convert(alienNode.position, to: worldNode)
+        } else {
+            impactPos = alienNode.position
+        }
+        ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene!)
 
+        if isDead {
             alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
             let scoreValue = alienEntity.scoreValueComponent.value
-            ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreValue)
+            ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
             scoreManager.addPoints(scoreValue)
+
+            // Chance to drop powerup
+            if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                spawnPowerup(at: impactPos)
+            }
         } else {
             let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
             let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
@@ -252,6 +358,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard gameState == .playing else { return }
         if playerEntity.isInvulnerable { return }
 
+        // Shield powerup absorbs the hit
+        if playerEntity.hasShield {
+            playerEntity.clearPowerup()
+            return
+        }
+
         let isDead = playerEntity.healthComponent.takeDamage(1)
         livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
 
@@ -268,6 +380,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let ufoNode = ufoBody.node as? SKSpriteNode else { return }
 
         guard let ufo = ufoNode.userData?["entity"] as? UFOEntity else { return }
+
+        // Spark effect
+        ParticleEffects.spawnSparkBurst(at: ufoNode.position, in: self)
 
         let isDead = ufo.healthComponent.takeDamage(1)
 
@@ -287,23 +402,78 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bulletNode.removeFromParent()
     }
 
+    private func handlePlayerCollectsPowerup(powerupBody: SKPhysicsBody) {
+        guard gameState == .playing else { return }
+        guard let powerupNode = powerupBody.node as? SKSpriteNode,
+              let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
+
+        playerEntity.applyPowerup(powerup.type)
+
+        // Update lives display if extra life
+        if powerup.type == .extraLife {
+            livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
+        }
+
+        // Collection effect
+        let pulse = SKAction.group([
+            SKAction.scale(to: 1.5, duration: 0.1),
+            SKAction.fadeOut(withDuration: 0.15)
+        ])
+        let remove = SKAction.removeFromParent()
+        powerupNode.run(SKAction.sequence([pulse, remove]))
+    }
+
+    private func handleBulletHitsShield(bulletBody: SKPhysicsBody, shieldBody: SKPhysicsBody) {
+        guard let bulletNode = bulletBody.node,
+              let shieldNode = shieldBody.node as? SKSpriteNode,
+              let barrier = shieldNode.userData?["entity"] as? ShieldBarrierEntity else { return }
+
+        // Spark effect at impact
+        ParticleEffects.spawnSparkBurst(at: bulletNode.position, in: self)
+
+        let isDead = barrier.healthComponent.takeDamage(1)
+
+        if isDead {
+            shieldNode.removeFromParent()
+            shieldBarriers.removeAll { $0 === barrier }
+        } else {
+            barrier.updateVisual()
+
+            // Flash effect
+            let flash = SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.3, duration: 0.05),
+                SKAction.fadeAlpha(to: CGFloat(barrier.healthComponent.currentHP) / CGFloat(barrier.healthComponent.maxHP) * 0.6 + 0.4, duration: 0.05)
+            ])
+            shieldNode.run(flash)
+        }
+
+        bulletNode.removeFromParent()
+    }
+
     // MARK: - Player Death & Game Over
 
     private func handlePlayerDeath() {
         gameState = .gameOver
         playerEntity.shootingComponent.isFiring = false
+        playerEntity.clearPowerup()
 
         let playerPos = playerEntity.spriteComponent.node.position
         ExplosionEffect.spawn(at: playerPos, in: self, scoreValue: 0)
         playerEntity.spriteComponent.node.isHidden = true
 
-        // Hide formation and remove lingering bullets/UFO
+        // Screen shake
+        ScreenShakeEffect.shake(node: worldNode, duration: 0.6, intensity: 12)
+
+        // Hide formation and remove lingering bullets/UFO/powerups
         alienFormation?.formationNode.isHidden = true
         removeUFO()
-        enumerateChildNodes(withName: "enemyBullet") { node, _ in
+        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
-        enumerateChildNodes(withName: "playerBullet") { node, _ in
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
             node.removeFromParent()
         }
 
@@ -346,6 +516,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         entities.removeAll()
+        shieldBarriers.removeAll()
 
         // Remove formation (unhide first in case it was hidden during game over)
         alienFormation?.formationNode.isHidden = false
@@ -354,6 +525,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Remove UFO if active
         removeUFO()
+
+        // Remove any lingering powerup nodes
+        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
+            node.removeFromParent()
+        }
 
         // Reset state
         currentLevel = 1
@@ -367,6 +543,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Re-setup
         setupPlayer()
         setupAliens()
+        setupShieldBarriers()
         livesDisplay.update(lives: GameConstants.playerLives)
     }
 
@@ -391,13 +568,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         gameState = .levelTransition
         currentLevel += 1
         playerEntity.shootingComponent.isFiring = false
+        playerEntity.clearPowerup()
 
-        // Clean up UFO and lingering bullets
+        // Clean up UFO, lingering bullets, and powerups
         removeUFO()
-        enumerateChildNodes(withName: "enemyBullet") { node, _ in
+        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
-        enumerateChildNodes(withName: "playerBullet") { node, _ in
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
             node.removeFromParent()
         }
 
@@ -449,6 +630,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Create new formation (setupAliens uses LevelManager)
         setupAliens()
 
+        // Respawn shield barriers
+        setupShieldBarriers()
+
         // Reset player position
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
 
@@ -465,7 +649,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard ufoEntity == nil else { return }
 
         let ufo = UFOEntity(sceneSize: size)
-        addChild(ufo.spriteComponent.node)
+        worldNode.addChild(ufo.spriteComponent.node)
         entities.append(ufo)
         ufoEntity = ufo
     }

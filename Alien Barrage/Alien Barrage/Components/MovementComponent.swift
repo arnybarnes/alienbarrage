@@ -25,6 +25,7 @@ class MovementComponent: GKComponent {
 
     func move(toX targetX: CGFloat) {
         guard let spriteComp = entity?.component(ofType: SpriteComponent.self) else { return }
-        spriteComp.node.position.x = max(minX, min(maxX, targetX))
+        let clampedX = max(minX, min(maxX, targetX))
+        spriteComp.node.position.x = clampedX.rounded()
     }
 }

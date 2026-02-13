@@ -502,7 +502,7 @@ For the `didBegin(_ contact:)` handler, we need to go from `SKPhysicsBody` → `
 
 Replace the UIKit App Delegate + Storyboard entry point with a SwiftUI `@main App`. The game is embedded via `SpriteView`. Navigation between menu, settings, and game is handled by SwiftUI.
 
-**Flow:** App Launch → MenuView (SwiftUI) → [Settings (SwiftUI)] → Game (SpriteView) → Game Over → MenuView
+**Flow:** App Launch → MenuView (SwiftUI) → [Settings | Instructions (SwiftUI)] → Game (SpriteView) → Game Over → MenuView
 
 ### Files to Create
 
@@ -513,8 +513,8 @@ Replace the UIKit App Delegate + Storyboard entry point with a SwiftUI `@main Ap
 - Replaces `@main` on `AppDelegate.swift`
 
 **`Views/ContentView.swift`**
-- Manages app navigation state: `.menu`, `.playing`, `.settings`
-- Switches between `MenuView`, `SettingsView`, and `GameContainerView`
+- Manages app navigation state: `.menu`, `.playing`, `.settings`, `.instructions`
+- Switches between `MenuView`, `SettingsView`, `InstructionsView`, and `GameContainerView`
 - Passes `GameSettings` down via environment
 
 **`Views/MenuView.swift`**
@@ -523,9 +523,29 @@ Replace the UIKit App Delegate + Storyboard entry point with a SwiftUI `@main Ap
   - "ALIEN BARRAGE" title (large, neon-styled text or custom font)
   - High score from `HighScoreManager`
   - "TAP TO START" button → transitions to `.playing`
+  - "HOW TO PLAY" button → transitions to `.instructions`
   - Settings gear icon → transitions to `.settings`
   - Dark/black background matching game aesthetic
 - Animations: pulsing title, subtle glow effects
+
+**`Views/InstructionsView.swift`**
+- SwiftUI instructions/how-to-play screen
+- Dark/black background matching game aesthetic
+- Sections:
+  - **Controls**: Touch and drag to move ship. Ship fires automatically while touching.
+  - **Objective**: Destroy all aliens to advance to the next level. Don't let them reach the bottom.
+  - **Enemies**: Aliens shoot plasma balls downward. A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).
+  - **Scoring**: Small aliens = 100 pts, Large aliens = 200 pts (take 2 hits). Score displayed at top of screen.
+  - **Lives**: Start with 3 lives. Getting hit costs a life. Brief invulnerability after respawn.
+  - **Powerups** (with icons from spritesheet or colored circles):
+    - **Rapid Fire** (green orb) — Doubles fire rate for 8 seconds
+    - **Spread Shot** (blue orb) — Fires 3 bullets in a fan pattern for 8 seconds
+    - **Shield** (teal orb) — Protective aura that absorbs one enemy hit
+    - **Extra Life** (gold orb) — Instantly adds one life
+    - Powerups drop from destroyed aliens (~15% chance)
+  - **Difficulty**: Each level adds more aliens, faster movement, and quicker enemy fire
+- Back button to return to menu
+- Scrollable if content exceeds screen height
 
 **`Views/SettingsView.swift`**
 - SwiftUI settings screen with these options:
@@ -632,6 +652,7 @@ Replace the UIKit App Delegate + Storyboard entry point with a SwiftUI `@main Ap
 
 ### Test Criteria
 - Full game loop: SwiftUI Menu → Play → Game Over → SwiftUI Menu
+- Instructions screen accessible from menu, covers controls, scoring, powerups, and enemies
 - Settings screen accessible from menu with difficulty, autofire, autofire speed options
 - Autofire ON: ship fires continuously without touching; touch only moves ship
 - Autofire OFF: ship fires only while touching (original behavior)
