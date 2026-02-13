@@ -662,35 +662,84 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         playerEntity.shootingComponent.isFiring = false
         playerEntity.clearPowerup()
 
-        // Clean up UFO, lingering bullets, and powerups
-        removeUFO()
+        // Remove enemy bullets immediately — no reason to let them kill the player after clearing
         worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
             node.removeFromParent()
         }
-        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
-        }
-        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
-            node.removeFromParent()
+
+        // Wait for remaining player bullets, UFO, and powerups to finish
+        waitForClearThenShowLevel()
+    }
+
+    private func waitForClearThenShowLevel() {
+        let checkAction = SKAction.run { [weak self] in
+            guard let self else { return }
+
+            var remaining = false
+            worldNode.enumerateChildNodes(withName: "playerBullet") { _, stop in
+                remaining = true
+                stop.pointee = true
+            }
+            if !remaining {
+                worldNode.enumerateChildNodes(withName: "powerup") { _, stop in
+                    remaining = true
+                    stop.pointee = true
+                }
+            }
+            if !remaining && ufoEntity != nil {
+                remaining = true
+            }
+
+            if !remaining {
+                self.removeAction(forKey: "waitForClear")
+                self.removeUFO()
+                self.showLevelOverlay()
+
+                let wait = SKAction.wait(forDuration: 2.5)
+                let startNext = SKAction.run { [weak self] in
+                    self?.startNextLevel()
+                }
+                self.run(SKAction.sequence([wait, startNext]))
+            }
         }
 
-        showLevelOverlay()
+        let poll = SKAction.sequence([SKAction.wait(forDuration: 0.1), checkAction])
+        run(SKAction.repeatForever(poll), withKey: "waitForClear")
 
-        let wait = SKAction.wait(forDuration: 2.0)
-        let startNext = SKAction.run { [weak self] in
-            self?.startNextLevel()
-        }
-        run(SKAction.sequence([wait, startNext]))
+        // Safety timeout — don't wait forever
+        let timeout = SKAction.sequence([
+            SKAction.wait(forDuration: 3.0),
+            SKAction.run { [weak self] in
+                guard let self, self.overlayNode == nil else { return }
+                self.removeAction(forKey: "waitForClear")
+                self.removeUFO()
+                worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+                    node.removeFromParent()
+                }
+                worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
+                    node.removeFromParent()
+                }
+                self.showLevelOverlay()
+                let wait = SKAction.wait(forDuration: 2.5)
+                let startNext = SKAction.run { [weak self] in
+                    self?.startNextLevel()
+                }
+                self.run(SKAction.sequence([wait, startNext]))
+            }
+        ])
+        run(timeout, withKey: "waitForClearTimeout")
     }
 
     private func showLevelOverlay() {
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
-        // Semi-transparent background (z=-1 so text renders on top)
-        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.5), size: size)
+        // Semi-transparent background fades in
+        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.0), size: size)
         bg.position = CGPoint(x: size.width / 2, y: size.height / 2)
         bg.zPosition = -1
+        bg.run(SKAction.colorize(with: .black, colorBlendFactor: 1.0, duration: 0.0))
+        bg.run(SKAction.fadeAlpha(to: 0.5, duration: 0.3))
         overlay.addChild(bg)
 
         let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
@@ -700,6 +749,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
         numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35)
         overlay.addChild(numberLabel)
+
+        // Bounce-in animation for text
+        for label in [levelLabel, numberLabel] {
+            label.setScale(0.0)
+            label.run(SKAction.sequence([
+                SKAction.scale(to: 1.2, duration: 0.25),
+                SKAction.scale(to: 0.9, duration: 0.1),
+                SKAction.scale(to: 1.05, duration: 0.08),
+                SKAction.scale(to: 1.0, duration: 0.07)
+            ]))
+        }
 
         addChild(overlay)
         overlayNode = overlay
