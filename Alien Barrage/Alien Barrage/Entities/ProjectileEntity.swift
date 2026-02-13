@@ -28,7 +28,11 @@ class ProjectileEntity: GKEntity {
         node.zPosition = GameConstants.ZPosition.projectile
         node.name = "playerBullet"
 
-        // Physics body for collision detection (set up for Phase 3)
+        // Store entity reference for collision lookup
+        node.userData = NSMutableDictionary()
+        node.userData?["entity"] = self
+
+        // Physics body for collision detection
         let body = SKPhysicsBody(rectangleOf: ProjectileEntity.bulletSize)
         body.categoryBitMask = GameConstants.PhysicsCategory.playerBullet
         body.contactTestBitMask = GameConstants.PhysicsCategory.enemy | GameConstants.PhysicsCategory.ufo | GameConstants.PhysicsCategory.shield
