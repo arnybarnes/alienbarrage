@@ -99,7 +99,8 @@ class PowerupEntity: GKEntity {
             }
 
             let frameCount = max(1, loopFrames.count)
-            let timePerFrame = type.spinCycleDuration / Double(frameCount)
+            let adjustedDuration = type.spinCycleDuration / GameConstants.powerupSpinSpeed
+            let timePerFrame = adjustedDuration / Double(frameCount)
             let animate = SKAction.animate(with: loopFrames, timePerFrame: timePerFrame, resize: false, restore: false)
             node.run(SKAction.repeatForever(animate), withKey: "powerupSpin3D")
         }

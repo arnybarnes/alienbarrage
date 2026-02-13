@@ -74,6 +74,7 @@ enum GameConstants {
     static let powerupDropChance: Double = 0.15
     static let powerupFallSpeed: CGFloat = 150.0
     static let powerupDuration: TimeInterval = 8.0
+    static let powerupSpinSpeed: Double = 1.5  // multiplier: <1 = slower, >1 = faster
 
     // MARK: - Shield Barriers
     static let shieldBarriersEnabled: Bool = false
