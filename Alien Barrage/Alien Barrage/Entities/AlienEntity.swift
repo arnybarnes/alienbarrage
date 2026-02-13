@@ -42,7 +42,7 @@ class AlienEntity: GKEntity {
     let col: Int
     var isAlive: Bool = true
 
-    init(type: AlienType, row: Int, col: Int) {
+    init(type: AlienType, row: Int, col: Int, hpBonus: Int = 0) {
         self.alienType = type
         self.row = row
         self.col = col
@@ -53,8 +53,9 @@ class AlienEntity: GKEntity {
         let texture = SpriteSheet.shared.sprite(named: spriteName)
             ?? SpriteSheet.shared.sprite(named: "\(type.spritePrefix)1")!
 
+        let baseHP = type == .large ? 2 : 1
         spriteComponent = SpriteComponent(texture: texture, size: type.size)
-        healthComponent = HealthComponent(hp: type == .large ? 2 : 1)
+        healthComponent = HealthComponent(hp: baseHP + hpBonus)
         scoreValueComponent = ScoreValueComponent(value: type.scoreValue)
 
         super.init()

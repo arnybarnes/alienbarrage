@@ -54,7 +54,9 @@ Powerups:  powerupGreen, powerupShield
 
 ---
 
-## Phase 1: Player Ship & Shooting
+## Phase 1: Player Ship & Shooting ✅
+
+**Status:** COMPLETE
 
 **Goal:** Player ship at bottom, touch-drag to move horizontally, auto-fire projectiles upward while touching.
 
@@ -120,7 +122,9 @@ All paths relative to `Alien Barrage/Alien Barrage/`.
 
 ---
 
-## Phase 2: Alien Grid Formation & Movement
+## Phase 2: Alien Grid Formation & Movement ✅
+
+**Status:** COMPLETE
 
 **Goal:** Classic alien grid marches side-to-side, steps down at edges. No collisions yet.
 
@@ -180,7 +184,9 @@ All paths relative to `Alien Barrage/Alien Barrage/`.
 
 ---
 
-## Phase 3: Collisions, Explosions, & Scoring
+## Phase 3: Collisions, Explosions, & Scoring ✅
+
+**Status:** COMPLETE
 
 **Goal:** Bullets destroy aliens with explosions, score rendered with spritesheet digit sprites.
 
@@ -267,7 +273,9 @@ For the `didBegin(_ contact:)` handler, we need to go from `SKPhysicsBody` → `
 
 ---
 
-## Phase 4: Enemy Shooting, Lives, & Game Over
+## Phase 4: Enemy Shooting, Lives, & Game Over ✅
+
+**Status:** COMPLETE
 
 **Goal:** Aliens shoot back, player has 3 lives, death sequence, game over state.
 

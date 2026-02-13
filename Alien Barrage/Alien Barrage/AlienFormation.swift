@@ -31,7 +31,7 @@ class AlienFormation {
         aliveCount == 0
     }
 
-    init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0) {
+    init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0, alienHPBonus: Int = 0) {
         self.rows = rows
         self.cols = cols
         self.sceneWidth = sceneSize.width
@@ -49,7 +49,7 @@ class AlienFormation {
             let type: AlienType = row < 2 ? .large : .small
 
             for col in 0..<cols {
-                let alien = AlienEntity(type: type, row: row, col: col)
+                let alien = AlienEntity(type: type, row: row, col: col, hpBonus: alienHPBonus)
 
                 // Position within the formation (row 0 = top)
                 let x = CGFloat(col) * GameConstants.alienSpacingX
