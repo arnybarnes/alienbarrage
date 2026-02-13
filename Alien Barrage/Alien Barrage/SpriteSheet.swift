@@ -63,10 +63,11 @@ class SpriteSheet {
         "shield1": CGRect(x: 88, y: 1686, width: 170, height: 150),
         "shield2": CGRect(x: 310, y: 1686, width: 170, height: 150),
 
-        // UI Text
-        "levelStart": CGRect(x: 62, y: 1864, width: 228, height: 34),
-        "gameOver": CGRect(x: 318, y: 1864, width: 208, height: 34),
-        "plus100": CGRect(x: 552, y: 1864, width: 88, height: 34),
+        // UI Text (pixel-measured from spritesheet)
+        "levelStart": CGRect(x: 97, y: 1859, width: 339, height: 34),
+        "level": CGRect(x: 97, y: 1859, width: 158, height: 34),
+        "gameOver": CGRect(x: 469, y: 1859, width: 268, height: 34),
+        "plus100": CGRect(x: 773, y: 1859, width: 151, height: 34),
 
         // Digits 0-9 (reading "0123456789" left to right)
         "digit0": CGRect(x: 72, y: 1944, width: 30, height: 38),

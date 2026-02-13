@@ -194,6 +194,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func handlePlayerBulletHitsEnemy(bulletBody: SKPhysicsBody, alienBody: SKPhysicsBody) {
+        guard gameState == .playing else { return }
         guard let bulletNode = bulletBody.node as? SKSpriteNode,
               let alienNode = alienBody.node as? SKSpriteNode else { return }
 
@@ -229,7 +230,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove the bullet
         bulletNode.removeFromParent()
 
-        // If player is invulnerable, ignore
+        // Ignore if not playing or player is invulnerable
+        guard gameState == .playing else { return }
         if playerEntity.isInvulnerable { return }
 
         let isDead = playerEntity.healthComponent.takeDamage(1)
@@ -252,6 +254,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ExplosionEffect.spawn(at: playerPos, in: self, scoreValue: 0)
         playerEntity.spriteComponent.node.isHidden = true
 
+        // Hide formation and remove lingering bullets
+        alienFormation?.formationNode.isHidden = true
+        enumerateChildNodes(withName: "enemyBullet") { node, _ in
+            node.removeFromParent()
+        }
+        enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+
         let wait = SKAction.wait(forDuration: 1.0)
         let showOverlay = SKAction.run { [weak self] in
             self?.showGameOverOverlay()
@@ -263,8 +274,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
+        // Dimmed background (z=-1 so text renders on top)
+        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.7), size: size)
+        bg.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        bg.zPosition = -1
+        overlay.addChild(bg)
+
         if let gameOverTexture = SpriteSheet.shared.sprite(named: "gameOver") {
-            let gameOverSprite = SKSpriteNode(texture: gameOverTexture, size: CGSize(width: 260, height: 42))
+            let gameOverSprite = SKSpriteNode(texture: gameOverTexture, size: CGSize(width: 300, height: 38))
             gameOverSprite.position = CGPoint(x: size.width / 2, y: size.height / 2)
             overlay.addChild(gameOverSprite)
         }
@@ -288,7 +305,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         entities.removeAll()
 
-        // Remove formation
+        // Remove formation (unhide first in case it was hidden during game over)
+        alienFormation?.formationNode.isHidden = false
         alienFormation?.formationNode.removeFromParent()
         alienFormation = nil
 
@@ -316,6 +334,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentLevel += 1
         playerEntity.shootingComponent.isFiring = false
 
+        // Clean up lingering bullets
+        enumerateChildNodes(withName: "enemyBullet") { node, _ in
+            node.removeFromParent()
+        }
+        enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+
         showLevelOverlay()
 
         let wait = SKAction.wait(forDuration: 2.0)
@@ -329,23 +355,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
-        // "LEVEL" text sprite
-        if let levelTexture = SpriteSheet.shared.sprite(named: "levelStart") {
-            let levelSprite = SKSpriteNode(texture: levelTexture, size: CGSize(width: 228, height: 34))
-            levelSprite.position = CGPoint(x: size.width / 2 - 30, y: size.height / 2)
+        // Semi-transparent background (z=-1 so text renders on top)
+        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.5), size: size)
+        bg.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        bg.zPosition = -1
+        overlay.addChild(bg)
+
+        // "LEVEL" text sprite centered (cropped from "LEVEL START")
+        if let levelTexture = SpriteSheet.shared.sprite(named: "level") {
+            let levelSprite = SKSpriteNode(texture: levelTexture, size: CGSize(width: 150, height: 44))
+            levelSprite.position = CGPoint(x: size.width / 2, y: size.height / 2 + 30)
             overlay.addChild(levelSprite)
         }
 
-        // Level number from digit textures
+        // Level number centered below the "LEVEL" text
         let digits = Array(String(currentLevel))
-        let digitSize = CGSize(width: 20, height: 25)
-        let spacing: CGFloat = 22.0
-        let startX = size.width / 2 + 228 / 2 - 10
+        let digitSize = CGSize(width: 26, height: 33)
+        let spacing: CGFloat = 30.0
+        let totalWidth = CGFloat(digits.count - 1) * spacing
+        let startX = size.width / 2 - totalWidth / 2
         for (i, char) in digits.enumerated() {
             guard let digit = Int(String(char)),
                   let texture = SpriteSheet.shared.digitTexture(digit) else { continue }
             let digitNode = SKSpriteNode(texture: texture, size: digitSize)
-            digitNode.position = CGPoint(x: startX + CGFloat(i) * spacing, y: size.height / 2)
+            digitNode.position = CGPoint(x: startX + CGFloat(i) * spacing, y: size.height / 2 - 25)
             overlay.addChild(digitNode)
         }
 
