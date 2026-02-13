@@ -63,8 +63,8 @@ enum GameConstants {
     static let ufoSpeed: CGFloat = 100.0
     static let ufoHP: Int = 3
     static let ufoScoreValue: Int = 500
-    static let ufoSpawnIntervalMin: TimeInterval = 20.0
-    static let ufoSpawnIntervalMax: TimeInterval = 40.0
+    static let ufoSpawnIntervalMin: TimeInterval = 10.0
+    static let ufoSpawnIntervalMax: TimeInterval = 25.0
 
     // MARK: - Scoring
     static let alienSmallScore: Int = 100

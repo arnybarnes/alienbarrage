@@ -448,9 +448,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             ufoNode.removeFromParent()
             ufoEntity = nil
         } else {
-            let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
-            let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
-            ufoNode.run(SKAction.sequence([colorize, restore]))
+            let blink = SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.2, duration: 0.05),
+                SKAction.fadeAlpha(to: 1.0, duration: 0.1)
+            ])
+            ufoNode.run(blink)
         }
 
         bulletNode.removeFromParent()

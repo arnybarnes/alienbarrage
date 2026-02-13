@@ -29,7 +29,7 @@ struct GameContainerView: View {
                     .frame(width: 30, height: 30)
                     .background(Circle().fill(Color.black.opacity(0.4)))
             }
-            .padding(.top, 50)
+            .padding(.top, 10)
             .padding(.trailing, 12)
         }
         .onAppear {
