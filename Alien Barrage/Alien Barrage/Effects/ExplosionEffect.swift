@@ -23,7 +23,7 @@ enum ExplosionEffect {
         explosionNode.zPosition = GameConstants.ZPosition.explosion
         scene.addChild(explosionNode)
 
-        let animate = SKAction.animate(with: [tex1, tex2, tex3], timePerFrame: 0.1)
+        let animate = SKAction.animate(with: [tex1, tex2, tex3], timePerFrame: 0.1, resize: false, restore: false)
         let fadeOut = SKAction.fadeOut(withDuration: 0.2)
         let scaleUp = SKAction.scale(to: 1.5, duration: 0.2)
         let fadeAndScale = SKAction.group([fadeOut, scaleUp])
@@ -43,11 +43,20 @@ enum ExplosionEffect {
         let totalWidth = CGFloat(digits.count - 1) * spacing
         let startX = -totalWidth / 2.0
 
-        // Build "+" prefix
-        if let plusTex = SpriteSheet.shared.sprite(named: "plus100") {
-            let plusNode = SKSpriteNode(texture: plusTex, size: CGSize(width: 12, height: 18))
-            plusNode.position = CGPoint(x: startX - spacing, y: 0)
-            popupNode.addChild(plusNode)
+        // Use the pre-rendered "+100" texture directly for 100-point popups,
+        // otherwise build from individual digit textures
+        if scoreValue == 100, let plusTex = SpriteSheet.shared.sprite(named: "plus100") {
+            let textNode = SKSpriteNode(texture: plusTex, size: CGSize(width: 44, height: 17))
+            popupNode.addChild(textNode)
+
+            scene.addChild(popupNode)
+
+            let moveUp = SKAction.moveBy(x: 0, y: 60, duration: 0.8)
+            let fadeOut = SKAction.fadeOut(withDuration: 0.8)
+            let group = SKAction.group([moveUp, fadeOut])
+            let remove = SKAction.removeFromParent()
+            popupNode.run(SKAction.sequence([group, remove]))
+            return
         }
 
         for (i, char) in digits.enumerated() {

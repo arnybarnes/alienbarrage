@@ -89,21 +89,22 @@ class SpriteSheet {
         "powerupExtraLife": CGRect(x: 1804, y: 1054, width: 110, height: 110),
 
         // Green Explosions - Row 1 (early, mid, peak)
-        "explosionGreen1": CGRect(x: 1074, y: 1204, width: 280, height: 260),
-        "explosionGreen2": CGRect(x: 1394, y: 1204, width: 280, height: 260),
-        "explosionGreen3": CGRect(x: 1714, y: 1204, width: 280, height: 260),
+        // Verified via PIL pixel scan: green clouds at y=1330-1560
+        "explosionGreen1": CGRect(x: 1024, y: 1325, width: 341, height: 235),
+        "explosionGreen2": CGRect(x: 1365, y: 1325, width: 341, height: 235),
+        "explosionGreen3": CGRect(x: 1706, y: 1325, width: 342, height: 235),
 
         // Orange Explosions - Row 2 (early, mid, peak)
-        "explosionOrange1": CGRect(x: 1074, y: 1494, width: 280, height: 260),
-        "explosionOrange2": CGRect(x: 1394, y: 1494, width: 280, height: 260),
-        "explosionGreen4": CGRect(x: 1714, y: 1494, width: 280, height: 260),
+        // Verified via PIL pixel scan: orange clouds at y=1565-1765
+        "explosionOrange1": CGRect(x: 1024, y: 1565, width: 341, height: 200),
+        "explosionOrange2": CGRect(x: 1365, y: 1565, width: 341, height: 200),
+        "explosionOrange3": CGRect(x: 1706, y: 1565, width: 342, height: 200),
 
         // Dissipating Explosions - Row 3 (fade-out frames)
-        "explosionGreen5": CGRect(x: 1074, y: 1784, width: 280, height: 230),
-        "explosionGreen6": CGRect(x: 1394, y: 1784, width: 280, height: 230),
-        "explosionGreen7": CGRect(x: 1714, y: 1784, width: 280, height: 230),
-        "explosionGreen8": CGRect(x: 1074, y: 1494, width: 280, height: 260),
-        "explosionGreen9": CGRect(x: 1394, y: 1494, width: 280, height: 260),
+        // Verified via PIL pixel scan: fading clouds at y=1800-1945
+        "explosionFade1": CGRect(x: 1024, y: 1800, width: 341, height: 145),
+        "explosionFade2": CGRect(x: 1365, y: 1800, width: 341, height: 145),
+        "explosionFade3": CGRect(x: 1706, y: 1800, width: 342, height: 145),
     ]
 
     private var textureCache: [String: SKTexture] = [:]

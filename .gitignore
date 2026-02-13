@@ -40,6 +40,10 @@ playground.xcworkspace
 # Screenshots
 *Screenshot*
 
+# Video frame exports
+frame_*.png
+*.mov
+
 # OS files
 .DS_Store
 .DS_Store?
