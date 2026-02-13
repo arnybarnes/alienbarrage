@@ -76,6 +76,7 @@ enum GameConstants {
     static let powerupDuration: TimeInterval = 8.0
 
     // MARK: - Shield Barriers
+    static let shieldBarriersEnabled: Bool = false
     static let shieldHP: Int = 5
 
     // MARK: - Sound File Names

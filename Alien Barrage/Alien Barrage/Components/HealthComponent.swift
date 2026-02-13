@@ -25,4 +25,9 @@ class HealthComponent: GKComponent {
         currentHP -= amount
         return currentHP <= 0
     }
+
+    /// Restores HP, capped at maxHP.
+    func heal(_ amount: Int) {
+        currentHP = min(currentHP + amount, maxHP)
+    }
 }
