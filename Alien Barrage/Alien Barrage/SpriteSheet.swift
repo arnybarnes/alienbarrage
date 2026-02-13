@@ -53,8 +53,8 @@ class SpriteSheet {
 
         // ── BOTTOM-LEFT QUADRANT (0,1024)-(1024,2048): Player, UFO, shields, text ──
 
-        // Player Ship - ship body + blue engine flames
-        "playerShip": CGRect(x: 42, y: 1061, width: 417, height: 490),
+        // Player Ship - sleek grey/blue fighter
+        "playerShip": CGRect(x: 631, y: 769, width: 315, height: 243),
 
         // UFO / Mothership saucer
         "ufo": CGRect(x: 510, y: 1142, width: 449, height: 211),
