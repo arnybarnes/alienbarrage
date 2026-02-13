@@ -49,7 +49,7 @@ class SpriteSheet {
         // Projectiles - bottom strip of top-right quadrant
         "playerBullet": CGRect(x: 1190, y: 650, width: 68, height: 275),
         "playerMissile": CGRect(x: 1450, y: 730, width: 48, height: 82),
-        "enemyBullet": CGRect(x: 1540, y: 715, width: 435, height: 70),
+        "enemyBullet": CGRect(x: 1507, y: 657, width: 474, height: 111),
 
         // ── BOTTOM-LEFT QUADRANT (0,1024)-(1024,2048): Player, UFO, shields, text ──
 
@@ -83,11 +83,11 @@ class SpriteSheet {
 
         // ── BOTTOM-RIGHT QUADRANT (1024,1024)-(2048,2048): Powerups, explosions ──
 
-        // Powerup orbs (4 colored orbs across top)
-        "powerupRapidFire": CGRect(x: 1129, y: 1054, width: 110, height: 110),
-        "powerupSpreadShot": CGRect(x: 1354, y: 1054, width: 110, height: 110),
-        "powerupShield": CGRect(x: 1579, y: 1054, width: 110, height: 110),
-        "powerupExtraLife": CGRect(x: 1804, y: 1054, width: 110, height: 110),
+        // Powerup icons (4 circular badges near top of bottom-right quadrant)
+        "powerupRapidFire": CGRect(x: 1127, y: 1122, width: 154, height: 155),
+        "powerupSpreadShot": CGRect(x: 1351, y: 1124, width: 154, height: 151),
+        "powerupShield": CGRect(x: 1563, y: 1118, width: 161, height: 166),
+        "powerupExtraLife": CGRect(x: 1785, y: 1123, width: 160, height: 155),
 
         // Green Explosions - Row 1 (early, mid, peak)
         // Verified via PIL pixel scan: green clouds at y=1330-1560
