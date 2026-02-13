@@ -31,12 +31,12 @@ class AlienFormation {
         aliveCount == 0
     }
 
-    init(rows: Int, cols: Int, sceneSize: CGSize) {
+    init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0) {
         self.rows = rows
         self.cols = cols
         self.sceneWidth = sceneSize.width
-        self.baseSpeed = GameConstants.alienBaseSpeed
-        self.speed = GameConstants.alienBaseSpeed
+        self.baseSpeed = GameConstants.alienBaseSpeed * speedMultiplier
+        self.speed = GameConstants.alienBaseSpeed * speedMultiplier
         self.totalAliens = rows * cols
         self.formationNode = SKNode()
         self.aliens = []
