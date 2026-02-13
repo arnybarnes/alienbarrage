@@ -12,7 +12,7 @@ class UFOEntity: GKEntity {
     let healthComponent: HealthComponent
     let scoreValueComponent: ScoreValueComponent
 
-    static let ufoSize = CGSize(width: 80, height: 45)
+    static let ufoSize = CGSize(width: 80, height: 30)   // source 470×175, preserves aspect ratio
 
     init(sceneSize: CGSize) {
         guard let texture = SpriteSheet.shared.sprite(named: "ufo") else {
@@ -46,9 +46,9 @@ class UFOEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Random entry side
+        // Random entry side — fly below the UI strip (lives/score at ~Y 794-800)
         let enterFromLeft = Bool.random()
-        let yPos = sceneSize.height - 50
+        let yPos = sceneSize.height - 120
         let startX: CGFloat = enterFromLeft ? -UFOEntity.ufoSize.width : sceneSize.width + UFOEntity.ufoSize.width
         let endX: CGFloat = enterFromLeft ? sceneSize.width + UFOEntity.ufoSize.width : -UFOEntity.ufoSize.width
 

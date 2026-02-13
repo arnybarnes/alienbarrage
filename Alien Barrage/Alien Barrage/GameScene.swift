@@ -372,6 +372,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Level Progression
 
+    private func checkAliensReachedBottom() {
+        guard gameState == .playing,
+              let formation = alienFormation,
+              let lowestY = formation.lowestAlienY() else { return }
+
+        let playerY = playerEntity.spriteComponent.node.position.y
+        if lowestY <= playerY {
+            handlePlayerDeath()
+        }
+    }
+
     private func checkLevelComplete() {
         guard gameState == .playing,
               let formation = alienFormation,
@@ -523,6 +534,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
                 ufoEntity = nil
             }
+
+            // Check if aliens reached the bottom (instant game over)
+            checkAliensReachedBottom()
 
             // Check level completion
             checkLevelComplete()
