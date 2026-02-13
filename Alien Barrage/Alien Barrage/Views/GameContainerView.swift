@@ -1,0 +1,49 @@
+import SwiftUI
+import SpriteKit
+
+struct GameContainerView: View {
+    @EnvironmentObject var gameSettings: GameSettings
+    let onGameOver: (Int) -> Void
+
+    @State private var scene: GameScene?
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            Color.black.ignoresSafeArea()
+
+            if let scene = scene {
+                SpriteView(scene: scene)
+                    .ignoresSafeArea()
+            }
+
+            // Exit button
+            Button {
+                let score = scene?.currentScore ?? 0
+                scene?.isPaused = true
+                HighScoreManager.shared.submit(score: score)
+                onGameOver(score)
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(.white.opacity(0.5))
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(Color.black.opacity(0.4)))
+            }
+            .padding(.top, 50)
+            .padding(.trailing, 12)
+        }
+        .onAppear {
+            let newScene = GameScene(size: GameConstants.sceneSize, settings: gameSettings)
+            newScene.scaleMode = .aspectFill
+            newScene.anchorPoint = CGPoint(x: 0, y: 0)
+            newScene.onGameOver = { score in
+                onGameOver(score)
+            }
+            scene = newScene
+        }
+        .onDisappear {
+            scene = nil
+        }
+        .statusBarHidden(true)
+    }
+}

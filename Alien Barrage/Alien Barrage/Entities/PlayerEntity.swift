@@ -23,12 +23,12 @@ class PlayerEntity: GKEntity {
 
     static let shipSize = CGSize(width: 92, height: 71)   // source 315×243, preserves aspect ratio
 
-    init(sceneSize: CGSize) {
+    init(sceneSize: CGSize, lives: Int = GameConstants.playerLives, fireRate: TimeInterval = GameConstants.playerFireRate) {
         guard let texture = SpriteSheet.shared.sprite(named: "playerShip") else {
             fatalError("Missing playerShip texture")
         }
 
-        baseFireRate = GameConstants.playerFireRate
+        baseFireRate = fireRate
 
         spriteComponent = SpriteComponent(texture: texture, size: PlayerEntity.shipSize)
         movementComponent = MovementComponent(
@@ -36,8 +36,8 @@ class PlayerEntity: GKEntity {
             sceneWidth: sceneSize.width,
             spriteHalfWidth: PlayerEntity.shipSize.width / 2
         )
-        shootingComponent = ShootingComponent(fireRate: GameConstants.playerFireRate)
-        healthComponent = HealthComponent(hp: GameConstants.playerLives)
+        shootingComponent = ShootingComponent(fireRate: fireRate)
+        healthComponent = HealthComponent(hp: lives)
 
         super.init()
 

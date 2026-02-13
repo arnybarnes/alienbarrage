@@ -146,6 +146,13 @@ class SpriteSheet {
         return sprite(named: "digit\(clamped)")
     }
 
+    /// Returns a UIImage for a named sprite (for use in SwiftUI).
+    func uiImage(named name: String) -> UIImage? {
+        guard let tex = sprite(named: name) else { return nil }
+        let cgImage = tex.cgImage()
+        return UIImage(cgImage: cgImage)
+    }
+
     /// Returns a list of all available sprite names
     var availableSprites: [String] {
         return Array(spriteRects.keys).sorted()
