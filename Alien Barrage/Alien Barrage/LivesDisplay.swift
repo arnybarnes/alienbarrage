@@ -10,7 +10,7 @@ class LivesDisplay {
     let node: SKNode
     private let shipIcons: [SKSpriteNode]
     private let maxLives: Int
-    private let iconSize = CGSize(width: 25, height: 27)   // matches player ship aspect ratio
+    private let iconSize = CGSize(width: 23, height: 27)   // matches player ship aspect ratio
     private let iconSpacing: CGFloat = 30.0
 
     init(maxLives: Int = GameConstants.playerLives) {

@@ -21,7 +21,7 @@ class PlayerEntity: GKEntity {
     var hasShield: Bool = false
     private let baseFireRate: TimeInterval
 
-    static let shipSize = CGSize(width: 80, height: 88)   // source 417×459, preserves aspect ratio
+    static let shipSize = CGSize(width: 75, height: 88)   // source 417×490, preserves aspect ratio
 
     init(sceneSize: CGSize) {
         guard let texture = SpriteSheet.shared.sprite(named: "playerShip") else {
