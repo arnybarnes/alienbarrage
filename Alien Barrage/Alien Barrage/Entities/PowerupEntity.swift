@@ -63,7 +63,7 @@ class PowerupEntity: GKEntity {
     init(type: PowerupType, position: CGPoint, sceneHeight: CGFloat) {
         self.type = type
 
-        guard let texture = SpriteSheet.shared.sprite(named: type.spriteName) else {
+        guard let texture = PowerupSpinSheet.shared.baseTexture(named: type.spriteName) else {
             fatalError("Missing \(type.spriteName) texture")
         }
 
@@ -89,24 +89,20 @@ class PowerupEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Fake 3D spin: animate width projection with perspective-like squash/brighten.
-        let cycleDuration = type.spinCycleDuration
-        let phaseOffset = CGFloat.random(in: 0...(2 * .pi))
-        let fake3DSpin = SKAction.customAction(withDuration: cycleDuration) { [spinDirection = type.spinDirection] node, elapsed in
-            let t = CGFloat(elapsed) / CGFloat(cycleDuration)
-            let angle = phaseOffset + spinDirection * t * 2 * .pi
-
-            var projectedWidth = cos(angle)
-            if abs(projectedWidth) < 0.08 {
-                projectedWidth = 0.08 * (projectedWidth >= 0 ? 1 : -1)
+        // 3D spin via frame-sequence animation from the dedicated powerup spritesheet.
+        if let spinFrames = PowerupSpinSheet.shared.spinFrames(named: type.spriteName), !spinFrames.isEmpty {
+            let loopFrames: [SKTexture]
+            if type.spinDirection < 0 {
+                loopFrames = Array(spinFrames.reversed())
+            } else {
+                loopFrames = spinFrames
             }
 
-            let facing = abs(projectedWidth)
-            node.xScale = projectedWidth
-            node.yScale = 0.90 + 0.10 * facing
-            node.alpha = 0.72 + 0.28 * facing
+            let frameCount = max(1, loopFrames.count)
+            let timePerFrame = type.spinCycleDuration / Double(frameCount)
+            let animate = SKAction.animate(with: loopFrames, timePerFrame: timePerFrame, resize: false, restore: false)
+            node.run(SKAction.repeatForever(animate), withKey: "powerupSpin3D")
         }
-        node.run(SKAction.repeatForever(fake3DSpin), withKey: "powerupSpin3D")
 
         // Fall downward
         let distance = position.y + PowerupEntity.powerupSize.height

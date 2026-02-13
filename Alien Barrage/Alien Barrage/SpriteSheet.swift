@@ -122,6 +122,12 @@ class SpriteSheet {
             return cached
         }
 
+        // Powerups are now sourced from a dedicated spin spritesheet.
+        if let powerupTexture = PowerupSpinSheet.shared.baseTexture(named: name) {
+            textureCache[name] = powerupTexture
+            return powerupTexture
+        }
+
         guard let pixelRect = spriteRects[name] else {
             print("SpriteSheet: Unknown sprite '\(name)'")
             return nil
