@@ -57,7 +57,7 @@ class SpriteSheet {
         "playerShip": CGRect(x: 42, y: 1061, width: 417, height: 459),
 
         // UFO / Mothership saucer
-        "ufo": CGRect(x: 375, y: 1088, width: 470, height: 175),
+        "ufo": CGRect(x: 510, y: 1142, width: 449, height: 211),
 
         // Shield / Barrier blocks
         "shield1": CGRect(x: 88, y: 1686, width: 170, height: 150),

@@ -12,7 +12,7 @@ class UFOEntity: GKEntity {
     let healthComponent: HealthComponent
     let scoreValueComponent: ScoreValueComponent
 
-    static let ufoSize = CGSize(width: 80, height: 30)   // source 470×175, preserves aspect ratio
+    static let ufoSize = CGSize(width: 80, height: 30)   // gameplay footprint; source texture is taller
 
     init(sceneSize: CGSize) {
         guard let texture = SpriteSheet.shared.sprite(named: "ufo") else {

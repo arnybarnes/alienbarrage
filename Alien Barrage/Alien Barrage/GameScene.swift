@@ -359,8 +359,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if playerEntity.isInvulnerable { return }
 
         // Shield powerup absorbs the hit
-        if playerEntity.shieldNode != nil {
-            playerEntity.removeShieldVisual()
+        if playerEntity.hasShield {
+            playerEntity.clearPowerup()
             return
         }
 

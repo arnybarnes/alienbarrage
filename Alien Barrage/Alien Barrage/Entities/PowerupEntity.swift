@@ -21,6 +21,15 @@ enum PowerupType: CaseIterable {
         }
     }
 
+    var glowColor: SKColor {
+        switch self {
+        case .rapidFire:  return SKColor(red: 0.2, green: 0.9, blue: 0.2, alpha: 1.0)  // Green
+        case .spreadShot: return SKColor(red: 0.2, green: 0.7, blue: 1.0, alpha: 1.0)  // Blue
+        case .shield:     return SKColor(red: 0.2, green: 0.9, blue: 0.9, alpha: 1.0)  // Teal
+        case .extraLife:  return SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0) // Gold
+        }
+    }
+
     static func random() -> PowerupType {
         allCases.randomElement()!
     }

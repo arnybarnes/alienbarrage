@@ -18,7 +18,7 @@ class PlayerEntity: GKEntity {
     // Powerup state
     private(set) var activePowerup: PowerupType?
     private var powerupTimer: TimeInterval = 0
-    private(set) var shieldNode: SKSpriteNode?
+    var hasShield: Bool = false
     private let baseFireRate: TimeInterval
 
     static let shipSize = CGSize(width: 80, height: 88)   // source 417×459, preserves aspect ratio
@@ -116,96 +116,53 @@ class PlayerEntity: GKEntity {
             clearPowerup()
         }
 
+        // Temporary glow flash from the powerup's color
+        let node = spriteComponent.node
+        let glowOn = SKAction.colorize(with: type.glowColor, colorBlendFactor: 0.6, duration: 0.15)
+        let glowSettle = SKAction.colorize(with: type.glowColor, colorBlendFactor: 0.25, duration: 0.3)
+        node.run(SKAction.sequence([glowOn, glowSettle]), withKey: "powerupGlow")
+
         switch type {
         case .rapidFire:
             activePowerup = .rapidFire
             powerupTimer = 0
             shootingComponent.fireRate = baseFireRate * 0.4
 
-            // Visual tint
-            spriteComponent.node.run(
-                SKAction.colorize(with: .yellow, colorBlendFactor: 0.3, duration: 0.2),
-                withKey: "powerupTint"
-            )
-
         case .spreadShot:
             activePowerup = .spreadShot
             powerupTimer = 0
 
-            // Visual tint
-            spriteComponent.node.run(
-                SKAction.colorize(with: .cyan, colorBlendFactor: 0.3, duration: 0.2),
-                withKey: "powerupTint"
-            )
-
         case .shield:
             activePowerup = .shield
             powerupTimer = 0
-            addShieldVisual()
+            hasShield = true
 
         case .extraLife:
             // Instant — don't set as activePowerup (preserves current powerup)
             healthComponent.heal(1)
-
-            let flash = SKAction.sequence([
-                SKAction.colorize(with: .green, colorBlendFactor: 0.6, duration: 0.1),
-                SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.3)
-            ])
-            spriteComponent.node.run(flash)
+            // Flash then fade the glow back out
+            let fadeOut = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.4)
+            node.run(SKAction.sequence([glowOn, fadeOut]), withKey: "powerupGlow")
         }
     }
 
     func clearPowerup() {
-        guard let powerup = activePowerup else { return }
+        guard activePowerup != nil else { return }
 
-        switch powerup {
-        case .rapidFire:
+        if activePowerup == .rapidFire {
             shootingComponent.fireRate = baseFireRate
-        case .spreadShot:
-            break
-        case .shield:
-            removeShieldVisual()
-        case .extraLife:
-            break
+        }
+        if activePowerup == .shield {
+            hasShield = false
         }
 
-        // Remove tint
+        // Fade glow out
         spriteComponent.node.run(
-            SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.2),
-            withKey: "powerupTint"
+            SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.3),
+            withKey: "powerupGlow"
         )
 
         activePowerup = nil
         powerupTimer = 0
-    }
-
-    // MARK: - Shield Visual
-
-    private func addShieldVisual() {
-        removeShieldVisual()
-
-        guard let tex = SpriteSheet.shared.sprite(named: "powerupShield") else { return }
-        let shield = SKSpriteNode(texture: tex, size: CGSize(width: 100, height: 100))
-        shield.alpha = 0.4
-        shield.zPosition = 1
-        shield.name = "playerShield"
-        spriteComponent.node.addChild(shield)
-        shieldNode = shield
-
-        // Pulse animation
-        let scaleUp = SKAction.scale(to: 1.08, duration: 0.6)
-        let scaleDown = SKAction.scale(to: 1.0, duration: 0.6)
-        scaleUp.timingMode = .easeInEaseOut
-        scaleDown.timingMode = .easeInEaseOut
-        shield.run(SKAction.repeatForever(SKAction.sequence([scaleUp, scaleDown])))
-    }
-
-    func removeShieldVisual() {
-        shieldNode?.removeFromParent()
-        shieldNode = nil
-        if activePowerup == .shield {
-            activePowerup = nil
-            powerupTimer = 0
-        }
     }
 }
