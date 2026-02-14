@@ -668,28 +668,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.zPosition = -1
         overlay.addChild(bg)
 
+        let hs = GameConstants.hudScale
+
         let label = makeOverlayLabel(text: "GAME OVER", fontSize: 48)
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40)
+        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40 * hs)
         overlay.addChild(label)
 
         let scoreLabel = makeOverlayLabel(text: "SCORE: \(scoreManager.currentScore)", fontSize: 28)
-        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20)
+        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
         overlay.addChild(scoreLabel)
 
         if isNewHigh {
             let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
-            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60)
+            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60 * hs)
             overlay.addChild(highLabel)
         }
-
-        let buttonSize = CGSize(width: 200, height: 50)
+        let buttonSize = CGSize(width: 200 * hs, height: 50 * hs)
         let button = SKSpriteNode(color: SKColor(red: 0.15, green: 0.5, blue: 0.15, alpha: 1.0), size: buttonSize)
-        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110)
+        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110 * hs)
         button.name = "continueButton"
 
         let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
         buttonLabel.text = "CONTINUE"
-        buttonLabel.fontSize = 22
+        buttonLabel.fontSize = 22 * hs
         buttonLabel.fontColor = .white
         buttonLabel.verticalAlignmentMode = .center
         buttonLabel.horizontalAlignmentMode = .center
@@ -871,12 +872,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.run(SKAction.fadeAlpha(to: 0.5, duration: 0.3))
         overlay.addChild(bg)
 
+        let hs = GameConstants.hudScale
+
         let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
-        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25)
+        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25 * hs)
         overlay.addChild(levelLabel)
 
         let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
-        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35)
+        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35 * hs)
         overlay.addChild(numberLabel)
 
         // Bounce-in animation for text
@@ -921,7 +924,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
 
         // Reset player position
-        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
+        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 120)
 
         gameState = .playing
 
@@ -953,9 +956,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - UI Helpers
 
     private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
+        let scaledSize = fontSize * GameConstants.hudScale
         let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
         label.text = text
-        label.fontSize = fontSize
+        label.fontSize = scaledSize
         label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
@@ -963,7 +967,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Shadow/outline effect via a duplicate label behind
         let shadow = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
         shadow.text = text
-        shadow.fontSize = fontSize
+        shadow.fontSize = scaledSize
         shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
         shadow.horizontalAlignmentMode = .center
         shadow.verticalAlignmentMode = .center

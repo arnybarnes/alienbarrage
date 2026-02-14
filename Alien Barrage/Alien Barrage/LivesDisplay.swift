@@ -10,8 +10,8 @@ class LivesDisplay {
     let node: SKNode
     private let shipIcons: [SKSpriteNode]
     private let maxLives: Int
-    private let iconSize = CGSize(width: 26, height: 20)   // matches player ship aspect ratio
-    private let iconSpacing: CGFloat = 30.0
+    private let iconSize = CGSize(width: 26 * GameConstants.hudScale, height: 20 * GameConstants.hudScale)
+    private let iconSpacing: CGFloat = 30.0 * GameConstants.hudScale
 
     init(maxLives: Int = GameConstants.playerLives) {
         self.maxLives = maxLives
@@ -31,7 +31,8 @@ class LivesDisplay {
         }
         shipIcons = icons
 
-        node.position = CGPoint(x: 50, y: GameConstants.sceneHeight - 80)
+        // Position at bottom-left of scene (below player ship)
+        node.position = CGPoint(x: 50, y: 25 * GameConstants.hudScale)
     }
 
     func update(lives: Int) {

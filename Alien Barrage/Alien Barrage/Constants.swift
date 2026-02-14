@@ -13,6 +13,9 @@ enum GameConstants {
     static var sceneHeight: CGFloat { UIScreen.main.bounds.height }
     static var sceneSize: CGSize { CGSize(width: sceneWidth, height: sceneHeight) }
 
+    // MARK: - HUD Scaling (scales up on larger screens, never below 1.0)
+    static var hudScale: CGFloat { max(1.0, min(sceneWidth, sceneHeight) / 844.0) }
+
     // MARK: - Physics Categories (bitmask)
     struct PhysicsCategory {
         static let none:            UInt32 = 0

@@ -12,7 +12,7 @@
 | Phase | Status | Notes |
 |-------|--------|-------|
 | Phase 1: Dynamic Scene Size | **Complete** | Constants.swift uses computed props from UIScreen.main.bounds; GameContainerView uses GeometryReader + .resizeFill |
-| Phase 2: Element Sizing Strategy | Not started | |
+| Phase 2: Element Sizing Strategy | **Complete** | `hudScale` added to Constants; applied to score font, lives icons/spacing, overlay labels, continue button |
 | Phase 3: Alien Formation Layout | Not started | |
 | Phase 4: HUD Repositioning | Not started | |
 | Phase 5: Player & Movement Bounds | Not started | |
@@ -121,19 +121,30 @@ iPad gets **more columns at all levels** to fill the wider screen.
 
 ## Phase 4: HUD Repositioning
 
+**Layout change:** All HUD elements moved from top of screen to **bottom**, below the player ship. This keeps the player's finger in mid-screen, away from the iOS app switcher edge. The exit button also moved to bottom-trailing.
+
 ### Score Display
 **File: `ScoreDisplay.swift`**
 
 - X: centered (`sceneWidth / 2`) — no change needed
-- Y: `sceneHeight - safeAreaTop - 20` instead of hardcoded `770`
+- Y: `30 * hudScale` (bottom of screen, below player ship)
 - Font size: `30 * hudScale`
 
 ### Lives Display
 **File: `LivesDisplay.swift`**
 
-- Position: `(safeAreaLeft + 50, sceneHeight - safeAreaTop - 30)` instead of `(50, sceneHeight - 80)`
+- Position: `(50, 25 * hudScale)` (bottom-left, below player ship)
 - Icon size: `26x20 * hudScale`
 - Icon spacing: `30 * hudScale`
+
+### Exit Button
+**File: `GameContainerView.swift`**
+
+- Moved from `.topTrailing` to `.bottomTrailing`
+- Padding changed from `.top` to `.bottom`
+
+### Player Ship
+- Raised from Y=80 to Y=120 to clear the HUD below it
 
 ### Game Over / Level Transition Overlays
 **File: `GameScene.swift`**
@@ -144,12 +155,14 @@ iPad gets **more columns at all levels** to fill the wider screen.
 - Vertical offsets between overlay elements: scale proportionally
 
 ### After this phase, test:
-- iPad: score should be near the top center, not floating in the middle of the screen
-- iPad: lives icons should be top-left, appropriately sized (not tiny)
-- iPhone 16: HUD positions should be identical to current build
+- iPad: score should be at the bottom center, below the player ship
+- iPad: lives icons should be bottom-left, appropriately sized (not tiny)
+- iPad: exit button should be bottom-right
+- iPhone 16: HUD at bottom, ship above it, aliens at top
+- Player ship should have clear space below it for the HUD, and clear space above for gameplay
 - Trigger game over: overlay text and continue button should be centered and appropriately sized on both devices
 - Trigger level transition: level text should be centered and readable on both devices
-- Check that HUD elements don't overlap the alien formation on any device
+- Drag the ship around — finger should stay in mid-screen, well away from the bottom edge
 
 ---
 
@@ -157,7 +170,7 @@ iPad gets **more columns at all levels** to fill the wider screen.
 
 **Files: `PlayerEntity.swift`, `MovementComponent.swift`, `GameScene.swift`**
 
-- Player start Y: `sceneHeight * 0.095` instead of hardcoded `80`
+- Player start Y: proportional instead of hardcoded `120` (raised from original 80 to clear bottom HUD)
 - Respawn position: same proportional formula
 - Ship size: **unchanged** (stays 92x71)
 - Movement clamp: already uses `sceneWidth - spriteHalfWidth` — works automatically

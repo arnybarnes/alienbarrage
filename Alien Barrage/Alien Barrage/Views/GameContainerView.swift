@@ -11,7 +11,7 @@ struct GameContainerView: View {
         GeometryReader { geo in
             let sceneSize = geo.size
 
-            ZStack(alignment: .topTrailing) {
+            ZStack(alignment: .bottomTrailing) {
                 Color.black.ignoresSafeArea()
 
                 if let scene = scene {
@@ -32,7 +32,7 @@ struct GameContainerView: View {
                         .frame(width: 30, height: 30)
                         .background(Circle().fill(Color.black.opacity(0.4)))
                 }
-                .padding(.top, 10)
+                .padding(.bottom, 10)
                 .padding(.trailing, 12)
             }
             .onAppear {

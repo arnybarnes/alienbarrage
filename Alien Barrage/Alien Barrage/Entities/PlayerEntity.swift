@@ -47,7 +47,7 @@ class PlayerEntity: GKEntity {
         addComponent(healthComponent)
 
         let node = spriteComponent.node
-        node.position = CGPoint(x: sceneSize.width / 2, y: 80)
+        node.position = CGPoint(x: sceneSize.width / 2, y: 120)
         node.zPosition = GameConstants.ZPosition.player
 
         // Store entity reference for collision lookup
