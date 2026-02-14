@@ -105,6 +105,14 @@ enum GameConstants {
         static let highScore           = ""
     }
 
+    // MARK: - Alien Swooping
+    static let swoopBaseInterval: TimeInterval = 4.0
+    static let swoopMinInterval: TimeInterval = 1.2
+    static let swoopIntervalDecreasePerLevel: Double = 0.3
+    static let swoopSpeed: CGFloat = 280.0
+    static let swoopMaxSimultaneous: Int = 4
+    static let swoopDestroyBelowY: CGFloat = -30.0
+
     // MARK: - Visual FX
     // Internal runtime toggles for quickly testing visual options.
     struct VisualFX {

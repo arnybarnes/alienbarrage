@@ -24,12 +24,15 @@ class AlienFormation {
     private let sceneWidth: CGFloat
     private var justReversed: Bool = false
 
+    /// Number of aliens currently swooping (removed from grid but still alive)
+    private(set) var swoopingCount: Int = 0
+
     var aliveCount: Int {
         aliens.flatMap { $0 }.compactMap { $0 }.filter { $0.isAlive }.count
     }
 
     var allDestroyed: Bool {
-        aliveCount == 0
+        aliveCount == 0 && swoopingCount == 0
     }
 
     init(rows: Int, cols: Int, sceneSize: CGSize, speedMultiplier: CGFloat = 1.0, alienHPBonus: Int = 0) {
@@ -141,6 +144,51 @@ class AlienFormation {
             }
         }
         return nil
+    }
+
+    // MARK: - Swooping
+
+    /// Picks a random bottom-row alien, removes it from the grid, reparents it into
+    /// `worldParent`, and returns the entity + its world position.
+    func extractRandomSwooper(into worldParent: SKNode) -> (AlienEntity, CGPoint)? {
+        guard let parent = formationNode.parent else { return nil }
+
+        // Collect the lowest alive alien in each column
+        var candidates: [(AlienEntity, Int, Int)] = []
+        for col in 0..<cols {
+            for row in stride(from: rows - 1, through: 0, by: -1) {
+                if let alien = aliens[row][col], alien.isAlive {
+                    candidates.append((alien, row, col))
+                    break
+                }
+            }
+        }
+        guard let (alien, row, col) = candidates.randomElement() else { return nil }
+
+        // Convert position to world coordinates before reparenting
+        let worldPos = formationNode.convert(alien.spriteComponent.node.position, to: parent)
+
+        // Remove from grid
+        aliens[row][col] = nil
+        swoopingCount += 1
+
+        // Reparent sprite from formation to world
+        let node = alien.spriteComponent.node
+        node.removeFromParent()
+        node.position = worldPos
+        worldParent.addChild(node)
+
+        // Stop bounce animation so the swoop path isn't fighting it
+        node.removeAction(forKey: "alienAliveMotion")
+        node.setScale(1.0)
+
+        alien.isSwooping = true
+        return (alien, worldPos)
+    }
+
+    /// Called when a swooping alien is destroyed or flies off-screen.
+    func swooperDestroyed() {
+        swoopingCount = max(0, swoopingCount - 1)
     }
 
     /// Returns the world Y position of the lowest alive alien
