@@ -34,7 +34,7 @@ struct GameContainerView: View {
         }
         .onAppear {
             let newScene = GameScene(size: GameConstants.sceneSize, settings: gameSettings)
-            newScene.scaleMode = .aspectFill
+            newScene.scaleMode = .aspectFit
             newScene.anchorPoint = CGPoint(x: 0, y: 0)
             newScene.onGameOver = { score in
                 onGameOver(score)
