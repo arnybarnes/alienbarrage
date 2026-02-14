@@ -1012,6 +1012,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gameState == .playing {
             alienFormation?.update(deltaTime: dt)
 
+            // Update player vertical ceiling: 1 ship height below lowest alien
+            if let lowestY = alienFormation?.lowestAlienY() {
+                let ceiling = lowestY - PlayerEntity.shipSize.height
+                playerEntity.movementComponent.maxY = max(playerEntity.movementComponent.minY, ceiling)
+            }
+
             // Enemy fire timer
             enemyFireTimer += dt
             if enemyFireTimer >= currentEnemyFireInterval {

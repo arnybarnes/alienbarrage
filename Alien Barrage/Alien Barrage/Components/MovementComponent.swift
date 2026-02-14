@@ -12,15 +12,15 @@ class MovementComponent: GKComponent {
     let minX: CGFloat
     let maxX: CGFloat
     let minY: CGFloat
-    let maxY: CGFloat
+    var maxY: CGFloat
 
     init(speed: CGFloat, sceneWidth: CGFloat, spriteHalfWidth: CGFloat,
-         baseY: CGFloat, sceneHeight: CGFloat) {
+         baseY: CGFloat, spriteHeight: CGFloat) {
         self.speed = speed
         self.minX = spriteHalfWidth
         self.maxX = sceneWidth - spriteHalfWidth
         self.minY = baseY
-        self.maxY = baseY + sceneHeight * 0.15
+        self.maxY = baseY + spriteHeight  // initial cap; updated each frame from formation
         super.init()
     }
 

@@ -14,7 +14,7 @@
 | Phase 1: Dynamic Scene Size | **Complete** | Constants.swift uses computed props from UIScreen.main.bounds; GameContainerView uses GeometryReader + .resizeFill |
 | Phase 2: Element Sizing Strategy | **Complete** | `hudScale` added to Constants; applied to score font, lives icons/spacing, overlay labels, continue button |
 | Phase 3: Alien Formation Layout | **Complete** | Bonus columns from width, proportional spacing/margins/stepDown, formation Y at 81% |
-| Phase 4: HUD Repositioning | Not started | |
+| Phase 4: HUD Repositioning | **Complete** | All items done during Phase 2 and the layout change (HUD moved to bottom, hudScale applied) |
 | Phase 5: Player & Movement Bounds | Not started | |
 | Phase 6: Gameplay Speed Scaling | Not started | |
 | Phase 7: Difficulty Balancing | Not started | |
