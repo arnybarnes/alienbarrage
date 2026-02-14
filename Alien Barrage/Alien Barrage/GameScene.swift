@@ -73,6 +73,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Overlay
     private var overlayNode: SKNode?
 
+    var safeAreaInsets: UIEdgeInsets = .zero
+
     convenience init(size: CGSize, settings: GameSettings) {
         self.init(size: size)
         self.settings = settings
@@ -178,7 +180,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupScoreDisplay() {
-        scoreDisplay = ScoreDisplay()
+        scoreDisplay = ScoreDisplay(bottomInset: safeAreaInsets.bottom)
         addChild(scoreDisplay.node)  // UI stays on scene, not worldNode
 
         scoreManager.onScoreChanged = { [weak self] score in
@@ -187,7 +189,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupLivesDisplay() {
-        livesDisplay = LivesDisplay()
+        livesDisplay = LivesDisplay(bottomInset: safeAreaInsets.bottom)
         addChild(livesDisplay.node)  // UI stays on scene, not worldNode
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)

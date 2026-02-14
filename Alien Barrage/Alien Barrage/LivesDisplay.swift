@@ -13,7 +13,7 @@ class LivesDisplay {
     private let iconSize = CGSize(width: 26 * GameConstants.hudScale, height: 20 * GameConstants.hudScale)
     private let iconSpacing: CGFloat = 30.0 * GameConstants.hudScale
 
-    init(maxLives: Int = GameConstants.playerLives) {
+    init(maxLives: Int = GameConstants.playerLives, bottomInset: CGFloat = 0) {
         self.maxLives = maxLives
         node = SKNode()
         node.zPosition = GameConstants.ZPosition.ui
@@ -31,8 +31,8 @@ class LivesDisplay {
         }
         shipIcons = icons
 
-        // Position at bottom-left of scene (below player ship)
-        node.position = CGPoint(x: 50, y: 25 * GameConstants.hudScale)
+        // Position at bottom-left of scene (below player ship), offset by safe area
+        node.position = CGPoint(x: 50, y: 25 * GameConstants.hudScale + bottomInset)
     }
 
     func update(lives: Int) {

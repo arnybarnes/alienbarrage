@@ -39,6 +39,8 @@ struct GameContainerView: View {
                 let newScene = GameScene(size: sceneSize, settings: gameSettings)
                 newScene.scaleMode = .resizeFill
                 newScene.anchorPoint = CGPoint(x: 0, y: 0)
+                let si = geo.safeAreaInsets
+                newScene.safeAreaInsets = UIEdgeInsets(top: si.top, left: si.leading, bottom: si.bottom, right: si.trailing)
                 newScene.onGameOver = { score in
                     onGameOver(score)
                 }
