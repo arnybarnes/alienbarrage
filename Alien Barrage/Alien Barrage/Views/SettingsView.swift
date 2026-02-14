@@ -52,7 +52,7 @@ struct SettingsView: View {
                                 .font(.caption)
                                 .foregroundColor(.gray)
                             Slider(value: $gameSettings.autofireSpeed,
-                                   in: 0.1...1.0,
+                                   in: 0.2...1.0,
                                    step: 0.05)
                             .tint(.green)
                             Text("SLOW")

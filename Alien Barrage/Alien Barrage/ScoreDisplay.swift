@@ -24,7 +24,7 @@ class ScoreDisplay {
         labelNode = label
 
         // Position at top-center of scene
-        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 800)
+        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 770)
 
         // Show initial "0"
         update(score: 0)

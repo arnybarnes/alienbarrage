@@ -43,6 +43,7 @@ class AlienEntity: GKEntity {
     let row: Int
     let col: Int
     var isAlive: Bool = true
+    var isSwooping: Bool = false
 
     private static var eyeGlowTextureCache: [String: SKTexture] = [:]
     private static var eyeGlowColorCache: [String: SKColor] = [:]

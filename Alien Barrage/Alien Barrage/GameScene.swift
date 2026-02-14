@@ -57,6 +57,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var ufoSpawnTimer: TimeInterval = 0
     private var nextUfoSpawnInterval: TimeInterval = 0
 
+    // Swooping aliens
+    private var swoopingAliens: [AlienEntity] = []
+    private var swoopTimer: TimeInterval = 0
+    private var currentSwoopInterval: TimeInterval = GameConstants.swoopBaseInterval
+    private var maxSimultaneousSwoops: Int = 1
+
     // Overlay
     private var overlayNode: SKNode?
 
@@ -135,6 +141,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             alienHPBonus: config.alienHPBonus
         )
         worldNode.addChild(alienFormation!.formationNode)
+
+        // Swoop config — scale interval and max count by level + difficulty
+        let difficultyMult = settings?.effectiveAlienSpeedMultiplier ?? 1.0
+        maxSimultaneousSwoops = config.maxSimultaneousSwoops
+        currentSwoopInterval = max(
+            GameConstants.swoopMinInterval,
+            GameConstants.swoopBaseInterval - Double(currentLevel - 1) * GameConstants.swoopIntervalDecreasePerLevel
+        ) / difficultyMult
+        swoopTimer = 0
     }
 
     private func setupScoreDisplay() {
@@ -226,6 +241,102 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         entities.append(powerup)
     }
 
+    // MARK: - Alien Swooping
+
+    private func buildSwoopPath(from start: CGPoint, playerX: CGFloat) -> CGPath {
+        let path = CGMutablePath()
+        path.move(to: start)
+
+        // Determine which side to curve away from — opposite to player
+        let offsetDir: CGFloat = start.x < size.width / 2 ? -1 : 1
+        let lateralSwing = CGFloat.random(in: 60...120) * offsetDir
+
+        // Control point 1: curve outward from center
+        let cp1 = CGPoint(
+            x: start.x + lateralSwing,
+            y: start.y - CGFloat.random(in: 80...160)
+        )
+        // Control point 2: sweep toward player
+        let cp2 = CGPoint(
+            x: playerX + CGFloat.random(in: -30...30),
+            y: CGFloat.random(in: 100...200)
+        )
+        // End point: below screen
+        let end = CGPoint(
+            x: playerX + CGFloat.random(in: -20...20),
+            y: GameConstants.swoopDestroyBelowY
+        )
+
+        path.addCurve(to: end, control1: cp1, control2: cp2)
+        return path
+    }
+
+    private func initiateSwoop() {
+        guard let formation = alienFormation,
+              formation.aliveCount > 0,
+              swoopingAliens.count < maxSimultaneousSwoops else { return }
+
+        guard let (alien, _) = formation.extractRandomSwooper(into: worldNode) else { return }
+
+        swoopingAliens.append(alien)
+
+        let node = alien.spriteComponent.node
+
+        // Update physics so swooper can contact the player
+        node.physicsBody?.contactTestBitMask |= GameConstants.PhysicsCategory.player
+        node.physicsBody?.isDynamic = true
+        node.physicsBody?.affectedByGravity = false
+
+        // Build path and calculate duration from speed
+        let playerX = playerEntity.spriteComponent.node.position.x
+        let swoopPath = buildSwoopPath(from: node.position, playerX: playerX)
+
+        // Approximate path length for duration
+        let boundingBox = swoopPath.boundingBox
+        let approxLength = hypot(boundingBox.width, boundingBox.height) * 1.4
+        let duration = TimeInterval(approxLength / GameConstants.swoopSpeed)
+
+        let follow = SKAction.follow(swoopPath, asOffset: false, orientToPath: false, duration: duration)
+        follow.timingMode = .easeIn
+
+        // Add a wobble rotation during flight
+        let wobble = SKAction.repeatForever(
+            SKAction.sequence([
+                SKAction.rotate(byAngle: .pi / 12, duration: 0.15),
+                SKAction.rotate(byAngle: -.pi / 6, duration: 0.3),
+                SKAction.rotate(byAngle: .pi / 12, duration: 0.15)
+            ])
+        )
+
+        // Run wobble separately (repeatForever would block a group from completing)
+        node.run(wobble, withKey: "swoopWobble")
+
+        let cleanup = SKAction.run { [weak self, weak alien] in
+            guard let self, let alien else { return }
+            self.destroySwoopingAlien(alien, hitPlayer: false)
+        }
+        node.run(SKAction.sequence([follow, cleanup]), withKey: "swoopPath")
+    }
+
+    private func destroySwoopingAlien(_ alien: AlienEntity, hitPlayer: Bool) {
+        guard alien.isAlive else { return }
+
+        alien.isAlive = false
+        alien.isSwooping = false
+        let node = alien.spriteComponent.node
+        node.removeAllActions()
+
+        if hitPlayer {
+            // Explosion on player contact
+            ExplosionEffect.spawn(at: node.position, in: self, scoreValue: 0)
+        }
+        // No explosion and no score if it just flew off-screen
+
+        node.removeFromParent()
+        swoopingAliens.removeAll { $0 === alien }
+        alienFormation?.swooperDestroyed()
+    }
+
     // MARK: - Touch Handling
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -309,6 +420,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
 
+        // Swooping alien hits player
+        if (maskA == GameConstants.PhysicsCategory.enemy && maskB == GameConstants.PhysicsCategory.player) ||
+           (maskB == GameConstants.PhysicsCategory.enemy && maskA == GameConstants.PhysicsCategory.player) {
+            let alienBody = maskA == GameConstants.PhysicsCategory.enemy ? bodyA : bodyB
+            handleSwooperHitsPlayer(alienBody: alienBody)
+            return
+        }
+
     }
 
     // MARK: - Collision Handlers
@@ -322,9 +441,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let isDead = alienEntity.healthComponent.takeDamage(1)
 
-        // Spark effect at impact
+        // Spark effect at impact — swooping aliens are already in world coords
         let impactPos: CGPoint
-        if let formationNode = alienNode.parent {
+        if alienEntity.isSwooping {
+            impactPos = alienNode.position
+        } else if let formationNode = alienNode.parent {
             impactPos = formationNode.convert(alienNode.position, to: worldNode)
         } else {
             impactPos = alienNode.position
@@ -335,15 +456,33 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             AudioManager.shared.play(GameConstants.Sound.enemyDeath)
             if GameConstants.Haptic.alienKilled { HapticManager.shared.mediumImpact() }
 
-            alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
+            if alienEntity.isSwooping {
+                // Swooper: clean up directly (already removed from grid)
+                let scoreValue = alienEntity.scoreValueComponent.value
+                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
+                scoreManager.addPoints(scoreValue)
 
-            let scoreValue = alienEntity.scoreValueComponent.value
-            ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
-            scoreManager.addPoints(scoreValue)
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                    spawnPowerup(at: impactPos)
+                }
 
-            // Chance to drop powerup
-            if Double.random(in: 0...1) < GameConstants.powerupDropChance {
-                spawnPowerup(at: impactPos)
+                alienEntity.isAlive = false
+                alienEntity.isSwooping = false
+                alienNode.removeAllActions()
+                alienNode.removeFromParent()
+                swoopingAliens.removeAll { $0 === alienEntity }
+                alienFormation?.swooperDestroyed()
+            } else {
+                alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
+
+                let scoreValue = alienEntity.scoreValueComponent.value
+                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
+                scoreManager.addPoints(scoreValue)
+
+                // Chance to drop powerup
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                    spawnPowerup(at: impactPos)
+                }
             }
         } else {
             let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
@@ -438,6 +577,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         powerupNode.run(SKAction.sequence([pulse, remove]))
     }
 
+    private func handleSwooperHitsPlayer(alienBody: SKPhysicsBody) {
+        guard gameState == .playing else { return }
+        guard let alienNode = alienBody.node as? SKSpriteNode,
+              let alienEntity = alienNode.userData?["entity"] as? AlienEntity,
+              alienEntity.isSwooping, alienEntity.isAlive else { return }
+
+        // Destroy the swooper with explosion
+        destroySwoopingAlien(alienEntity, hitPlayer: true)
+
+        // Damage the player
+        if playerEntity.isInvulnerable { return }
+
+        if playerEntity.hasShield {
+            playerEntity.clearPowerup()
+            ScreenShakeEffect.shake(node: worldNode, duration: 0.3, intensity: 6)
+            return
+        }
+
+        AudioManager.shared.play(GameConstants.Sound.playerHit)
+        let isDead = playerEntity.healthComponent.takeDamage(1)
+        livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
+        ScreenShakeEffect.shake(node: worldNode, duration: 0.4, intensity: 8)
+
+        if isDead {
+            handlePlayerDeath()
+        } else {
+            playerEntity.makeInvulnerable(duration: GameConstants.playerInvulnerabilityDuration)
+        }
+    }
+
     // MARK: - Player Death & Game Over
 
     private func handlePlayerDeath() {
@@ -454,6 +623,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Screen shake
         ScreenShakeEffect.shake(node: worldNode, duration: 0.6, intensity: 12)
+
+        // Remove swooping aliens
+        for swooper in swoopingAliens {
+            swooper.spriteComponent.node.removeAllActions()
+            swooper.spriteComponent.node.removeFromParent()
+        }
+        swoopingAliens.removeAll()
 
         // Hide formation and remove lingering bullets/UFO/powerups
         alienFormation?.formationNode.isHidden = true
@@ -550,6 +726,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             node.removeFromParent()
         }
 
+        // Clear swooping state
+        for swooper in swoopingAliens {
+            swooper.spriteComponent.node.removeAllActions()
+            swooper.spriteComponent.node.removeFromParent()
+        }
+        swoopingAliens.removeAll()
+        swoopTimer = 0
+
         // Reset state
         currentLevel = 1
         currentEnemyFireInterval = GameConstants.enemyFireInterval
@@ -612,6 +796,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
             if !remaining && ufoEntity != nil {
+                remaining = true
+            }
+            if !remaining && !swoopingAliens.isEmpty {
                 remaining = true
             }
 
@@ -704,6 +891,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove old formation
         alienFormation?.formationNode.removeFromParent()
         alienFormation = nil
+
+        // Clear swooping state
+        for swooper in swoopingAliens {
+            swooper.spriteComponent.node.removeAllActions()
+            swooper.spriteComponent.node.removeFromParent()
+        }
+        swoopingAliens.removeAll()
+        swoopTimer = 0
 
         // Reset timers
         enemyFireTimer = 0
@@ -803,6 +998,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ufoSpawnTimer = 0
                 nextUfoSpawnInterval = randomUFOInterval()
                 spawnUFO()
+            }
+
+            // Swoop timer
+            swoopTimer += dt
+            if swoopTimer >= currentSwoopInterval {
+                swoopTimer = 0
+                initiateSwoop()
             }
 
             // Check if aliens reached the bottom (instant game over)

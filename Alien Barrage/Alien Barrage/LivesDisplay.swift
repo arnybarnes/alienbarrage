@@ -31,7 +31,7 @@ class LivesDisplay {
         }
         shipIcons = icons
 
-        node.position = CGPoint(x: 50, y: GameConstants.sceneHeight - 50)
+        node.position = CGPoint(x: 50, y: GameConstants.sceneHeight - 80)
     }
 
     func update(lives: Int) {
