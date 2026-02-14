@@ -122,6 +122,12 @@ class SpriteSheet {
             return cached
         }
 
+        // Aliens are now sourced from a dedicated spritesheet.
+        if let alienTexture = AlienSpriteSheet.shared.sprite(named: name) {
+            textureCache[name] = alienTexture
+            return alienTexture
+        }
+
         // Powerups are now sourced from a dedicated spin spritesheet.
         if let powerupTexture = PowerupSpinSheet.shared.baseTexture(named: name) {
             textureCache[name] = powerupTexture

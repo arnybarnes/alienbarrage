@@ -112,4 +112,10 @@ enum GameConstants {
         static let extraLife           = ""
         static let highScore           = ""
     }
+
+    // MARK: - Visual FX
+    // Internal runtime toggles for quickly testing visual options.
+    struct VisualFX {
+        static let alienEyeGlowEnabled: Bool = false
+    }
 }
