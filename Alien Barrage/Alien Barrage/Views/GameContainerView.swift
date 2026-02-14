@@ -27,9 +27,9 @@ struct GameContainerView: View {
                     onGameOver(score)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 14 * GameConstants.hudScale, weight: .bold))
                         .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 30, height: 30)
+                        .frame(width: 30 * GameConstants.hudScale, height: 30 * GameConstants.hudScale)
                         .background(Circle().fill(Color.black.opacity(0.4)))
                 }
                 .padding(.bottom, 10)

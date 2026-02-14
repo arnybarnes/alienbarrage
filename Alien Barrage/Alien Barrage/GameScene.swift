@@ -262,8 +262,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnPowerup(at position: CGPoint) {
         var type = PowerupType.random()
-        if type == .extraLife && playerEntity.healthComponent.currentHP >= 3 {
-            // Re-roll once to avoid extra life when player already has 3+ ships
+        if type == .extraLife && playerEntity.healthComponent.currentHP >= 5 {
+            // Re-roll once to avoid extra life when player already has 5+ ships
             type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
         }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
@@ -718,15 +718,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60 * hs)
             overlay.addChild(highLabel)
         }
-        let buttonSize = CGSize(width: 200 * hs, height: 50 * hs)
-        let button = SKSpriteNode(color: SKColor(red: 0.15, green: 0.5, blue: 0.15, alpha: 1.0), size: buttonSize)
+        let btnW = 250 * hs
+        let btnH = 50 * hs
+        let btnRect = CGRect(x: -btnW / 2, y: -btnH / 2, width: btnW, height: btnH)
+        let btnPath = UIBezierPath(roundedRect: btnRect, cornerRadius: 8 * hs)
+        let button = SKShapeNode(path: btnPath.cgPath)
+        button.strokeColor = SKColor.green.withAlphaComponent(0.5)
+        button.lineWidth = 1
+        button.fillColor = SKColor.green.withAlphaComponent(0.08)
         button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110 * hs)
         button.name = "continueButton"
 
-        let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let buttonLabel = SKLabelNode(fontNamed: "Menlo-Bold")
         buttonLabel.text = "MENU"
-        buttonLabel.fontSize = 22 * hs
-        buttonLabel.fontColor = .white
+        buttonLabel.fontSize = 20 * hs
+        buttonLabel.fontColor = .green
         buttonLabel.verticalAlignmentMode = .center
         buttonLabel.horizontalAlignmentMode = .center
         buttonLabel.name = "continueButton"
@@ -1112,7 +1118,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .top
-        label.position = CGPoint(x: playerPos.x, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
+        let margin: CGFloat = 60 * GameConstants.hudScale
+        let clampedX = min(max(playerPos.x, margin), size.width - margin)
+        label.position = CGPoint(x: clampedX, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
         label.zPosition = GameConstants.ZPosition.ui
         worldNode.addChild(label)
 

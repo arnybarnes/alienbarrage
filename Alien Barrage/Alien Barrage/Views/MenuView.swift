@@ -1,4 +1,5 @@
 import SwiftUI
+import SpriteKit
 import AVKit
 
 struct MenuView: View {
@@ -13,7 +14,8 @@ struct MenuView: View {
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            StarfieldView()
+                .ignoresSafeArea()
 
             GeometryReader { geo in
                 VStack(spacing: 12) {
@@ -74,6 +76,7 @@ struct MenuView: View {
 
                     Spacer().frame(height: 60)
                 }
+                .frame(maxWidth: 500)
                 .frame(maxWidth: .infinity)
                 .padding()
             }
@@ -99,6 +102,31 @@ struct MenuView: View {
                         .stroke(Color.green.opacity(0.5), lineWidth: 1)
                         .background(Color.green.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 8)))
                 )
+        }
+    }
+}
+
+// MARK: - Starfield Background
+
+struct StarfieldView: View {
+    @State private var scene: SKScene?
+
+    var body: some View {
+        GeometryReader { geo in
+            if let scene = scene {
+                SpriteView(scene: scene)
+            }
+            Color.clear.onAppear {
+                if scene == nil {
+                    let s = SKScene(size: geo.size)
+                    s.backgroundColor = .black
+                    s.scaleMode = .resizeFill
+                    s.anchorPoint = CGPoint(x: 0, y: 0)
+                    let emitter = ParticleEffects.createStarfield(sceneSize: geo.size)
+                    s.addChild(emitter)
+                    scene = s
+                }
+            }
         }
     }
 }
