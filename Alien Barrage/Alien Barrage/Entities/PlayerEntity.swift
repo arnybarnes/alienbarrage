@@ -34,7 +34,9 @@ class PlayerEntity: GKEntity {
         movementComponent = MovementComponent(
             speed: GameConstants.playerSpeed,
             sceneWidth: sceneSize.width,
-            spriteHalfWidth: PlayerEntity.shipSize.width / 2
+            spriteHalfWidth: PlayerEntity.shipSize.width / 2,
+            baseY: 120,
+            sceneHeight: sceneSize.height
         )
         shootingComponent = ShootingComponent(fireRate: fireRate)
         healthComponent = HealthComponent(hp: lives)

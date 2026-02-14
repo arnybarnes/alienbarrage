@@ -32,6 +32,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var playerEntity: PlayerEntity!
     private var touchStartLocation: CGPoint?
     private var playerStartX: CGFloat = 0
+    private var playerStartY: CGFloat = 0
 
     // Aliens
     private var alienFormation: AlienFormation?
@@ -359,6 +360,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first else { return }
         touchStartLocation = touch.location(in: self)
         playerStartX = playerEntity.spriteComponent.node.position.x
+        playerStartY = playerEntity.spriteComponent.node.position.y
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -366,7 +368,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first, let startLoc = touchStartLocation else { return }
         let currentLoc = touch.location(in: self)
         let deltaX = currentLoc.x - startLoc.x
-        playerEntity.movementComponent.move(toX: playerStartX + deltaX)
+        let deltaY = currentLoc.y - startLoc.y
+        playerEntity.movementComponent.move(toX: playerStartX + deltaX, toY: playerStartY + deltaY)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
