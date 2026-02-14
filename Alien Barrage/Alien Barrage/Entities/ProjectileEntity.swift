@@ -10,7 +10,8 @@ class ProjectileEntity: GKEntity {
 
     let spriteComponent: SpriteComponent
 
-    static let bulletSize = CGSize(width: 10, height: 24)
+    // Preserve the source texture aspect ratio (~1:3) so the full beam shape reads clearly.
+    static let bulletSize = CGSize(width: 8, height: 24)
 
     init(position: CGPoint, sceneHeight: CGFloat) {
         guard let texture = SpriteSheet.shared.sprite(named: "playerBullet") else {
