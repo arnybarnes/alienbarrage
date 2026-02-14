@@ -42,9 +42,10 @@ class ProjectileEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Move upward and remove when off-screen
+        // Move upward and remove when off-screen (speed scales with screen height)
         let distance = sceneHeight - position.y + ProjectileEntity.bulletSize.height
-        let duration = TimeInterval(distance / GameConstants.playerBulletSpeed)
+        let speed = GameConstants.playerBulletSpeed * GameConstants.heightRatio
+        let duration = TimeInterval(distance / speed)
         let moveUp = SKAction.moveBy(x: 0, y: distance, duration: duration)
         let remove = SKAction.removeFromParent()
         node.run(SKAction.sequence([moveUp, remove]))

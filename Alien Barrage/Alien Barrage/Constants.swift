@@ -16,6 +16,10 @@ enum GameConstants {
     // MARK: - HUD Scaling (scales up on larger screens, never below 1.0)
     static var hudScale: CGFloat { max(1.0, min(sceneWidth, sceneHeight) / 844.0) }
 
+    // MARK: - Speed Scaling Ratios (consistent travel time across screen sizes)
+    static var heightRatio: CGFloat { sceneHeight / 844.0 }
+    static var widthRatio: CGFloat { sceneWidth / 390.0 }
+
     // MARK: - Physics Categories (bitmask)
     struct PhysicsCategory {
         static let none:            UInt32 = 0

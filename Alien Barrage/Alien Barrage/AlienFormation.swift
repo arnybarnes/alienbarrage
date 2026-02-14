@@ -40,8 +40,9 @@ class AlienFormation {
         self.rows = rows
         self.cols = cols
         self.sceneWidth = sceneSize.width
-        self.baseSpeed = GameConstants.alienBaseSpeed * speedMultiplier
-        self.speed = GameConstants.alienBaseSpeed * speedMultiplier
+        let scaledSpeed = GameConstants.alienBaseSpeed * speedMultiplier * GameConstants.widthRatio
+        self.baseSpeed = scaledSpeed
+        self.speed = scaledSpeed
         self.totalAliens = rows * cols
         self.formationNode = SKNode()
         self.aliens = []

@@ -266,22 +266,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         path.move(to: start)
 
         // Determine which side to curve away from — opposite to player
+        let wr = GameConstants.widthRatio
+        let hr = GameConstants.heightRatio
         let offsetDir: CGFloat = start.x < size.width / 2 ? -1 : 1
-        let lateralSwing = CGFloat.random(in: 60...120) * offsetDir
+        let lateralSwing = CGFloat.random(in: 60...120) * wr * offsetDir
 
         // Control point 1: curve outward from center
         let cp1 = CGPoint(
             x: start.x + lateralSwing,
-            y: start.y - CGFloat.random(in: 80...160)
+            y: start.y - CGFloat.random(in: 80...160) * hr
         )
         // Control point 2: sweep toward player
         let cp2 = CGPoint(
-            x: playerX + CGFloat.random(in: -30...30),
-            y: CGFloat.random(in: 100...200)
+            x: playerX + CGFloat.random(in: -30...30) * wr,
+            y: CGFloat.random(in: 100...200) * hr
         )
         // End point: below screen
         let end = CGPoint(
-            x: playerX + CGFloat.random(in: -20...20),
+            x: playerX + CGFloat.random(in: -20...20) * wr,
             y: GameConstants.swoopDestroyBelowY
         )
 
@@ -312,7 +314,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Approximate path length for duration
         let boundingBox = swoopPath.boundingBox
         let approxLength = hypot(boundingBox.width, boundingBox.height) * 1.4
-        let duration = TimeInterval(approxLength / GameConstants.swoopSpeed)
+        let swoopSpeed = GameConstants.swoopSpeed * GameConstants.heightRatio
+        let duration = TimeInterval(approxLength / swoopSpeed)
 
         let follow = SKAction.follow(swoopPath, asOffset: false, orientToPath: false, duration: duration)
         follow.timingMode = .easeIn
@@ -593,9 +596,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         playerEntity.applyPowerup(powerup.type)
 
-        // Update lives display if extra life
+        // Update lives display if extra life + flash message
         if powerup.type == .extraLife {
             livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
+            flashExtraLifeMessage()
         }
 
         // Score
@@ -1088,6 +1092,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return label
     }
 
+    private func flashExtraLifeMessage() {
+        let playerPos = playerEntity.spriteComponent.node.position
+        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        label.text = "EXTRA SHIP!"
+        label.fontSize = 18 * GameConstants.hudScale
+        label.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .top
+        label.position = CGPoint(x: playerPos.x, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
+        label.zPosition = GameConstants.ZPosition.ui
+        worldNode.addChild(label)
+
+        label.run(SKAction.sequence([
+            SKAction.wait(forDuration: 0.5),
+            SKAction.fadeOut(withDuration: 0.15),
+            SKAction.removeFromParent()
+        ]))
+    }
+
     // MARK: - Update
 
     override func update(_ currentTime: TimeInterval) {
@@ -1108,7 +1131,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
-        if gameState == .playing {
+        if gameState == .playing && !isRespawning {
             alienFormation?.update(deltaTime: dt)
 
             // Update player vertical ceiling: 1 ship height below lowest alien

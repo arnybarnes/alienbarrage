@@ -46,17 +46,18 @@ class UFOEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Random entry side — fly below the UI strip (lives/score at ~Y 794-800)
+        // Random entry side — fly near the top (proportional Y position)
         let enterFromLeft = Bool.random()
-        let yPos = sceneSize.height - 120
+        let yPos = sceneSize.height * 0.858
         let startX: CGFloat = enterFromLeft ? -UFOEntity.ufoSize.width : sceneSize.width + UFOEntity.ufoSize.width
         let endX: CGFloat = enterFromLeft ? sceneSize.width + UFOEntity.ufoSize.width : -UFOEntity.ufoSize.width
 
         node.position = CGPoint(x: startX, y: yPos)
 
-        // Fly across and remove
+        // Fly across and remove (speed scales with screen width)
         let distance = abs(endX - startX)
-        let duration = TimeInterval(distance / GameConstants.ufoSpeed)
+        let speed = GameConstants.ufoSpeed * GameConstants.widthRatio
+        let duration = TimeInterval(distance / speed)
         let moveAcross = SKAction.moveTo(x: endX, duration: duration)
         let remove = SKAction.removeFromParent()
         node.run(SKAction.sequence([moveAcross, remove]), withKey: "ufoFly")

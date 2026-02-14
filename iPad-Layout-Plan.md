@@ -16,7 +16,7 @@
 | Phase 3: Alien Formation Layout | **Complete** | Bonus columns from width, proportional spacing/margins/stepDown, formation Y at 81% |
 | Phase 4: HUD Repositioning | **Complete** | All items done during Phase 2 and the layout change (HUD moved to bottom, hudScale applied) |
 | Phase 5: Player & Movement Bounds | **Complete** | Player start/respawn Y proportional (0.142), maxY dynamic from formation |
-| Phase 6: Gameplay Speed Scaling | Not started | |
+| Phase 6: Gameplay Speed Scaling | **Complete** | heightRatio/widthRatio in Constants; applied to player bullets, enemy bullets, powerup fall, UFO, alien march, swoop path/speed; UFO Y proportional (0.858) |
 | Phase 7: Difficulty Balancing | Not started | |
 | Phase 8: Particle Effects | Not started | |
 | Phase 9: SwiftUI Menus & Screens | Not started | |
