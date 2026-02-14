@@ -64,6 +64,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var currentSwoopInterval: TimeInterval = GameConstants.swoopBaseInterval
     private var maxSimultaneousSwoops: Int = 1
 
+    // Difficulty scaling for wider screens (more columns)
+    private var columnDifficultyRatio: Double = 1.0
+
     // Respawn state — pauses enemy attacks during glitch-in animation
     private var isRespawning: Bool = false
 
@@ -142,13 +145,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupAliens() {
         let config = LevelManager.config(forLevel: currentLevel)
         let fireIntervalMult = settings?.effectiveEnemyFireIntervalMultiplier ?? 1.0
-        currentEnemyFireInterval = config.fireInterval * fireIntervalMult
         let speedMult = settings?.effectiveAlienSpeedMultiplier ?? 1.0
         let speedMultiplier = (config.baseSpeed / GameConstants.alienBaseSpeed) * speedMult
 
         // Bonus columns on wider screens (iPad, Plus models)
         let bonusCols = max(0, Int((size.width - 390) / 130))
         let totalCols = config.cols + bonusCols
+
+        // Difficulty scaling: more columns = slower fire/swoop to keep bullet density consistent
+        let colRatio = CGFloat(totalCols) / CGFloat(config.cols)
+        columnDifficultyRatio = Double(colRatio)
+
+        currentEnemyFireInterval = config.fireInterval * fireIntervalMult * Double(colRatio)
 
         alienFormation = AlienFormation(
             rows: config.rows,
@@ -165,7 +173,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentSwoopInterval = max(
             GameConstants.swoopMinInterval,
             GameConstants.swoopBaseInterval - Double(currentLevel - 1) * GameConstants.swoopIntervalDecreasePerLevel
-        ) / difficultyMult
+        ) / difficultyMult * Double(colRatio)
         swoopTimer = 0
     }
 
@@ -253,7 +261,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Powerup Spawning
 
     private func spawnPowerup(at position: CGPoint) {
-        let type = PowerupType.random()
+        var type = PowerupType.random()
+        if type == .extraLife && playerEntity.healthComponent.currentHP >= 3 {
+            // Re-roll once to avoid extra life when player already has 3+ ships
+            type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
+        }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
         worldNode.addChild(powerup.spriteComponent.node)
         entities.append(powerup)
@@ -495,7 +507,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
 
@@ -513,7 +525,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 scoreManager.addPoints(scoreValue)
 
                 // Chance to drop powerup
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
             }
@@ -712,7 +724,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         button.name = "continueButton"
 
         let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
-        buttonLabel.text = "CONTINUE"
+        buttonLabel.text = "MENU"
         buttonLabel.fontSize = 22 * hs
         buttonLabel.fontColor = .white
         buttonLabel.verticalAlignmentMode = .center
