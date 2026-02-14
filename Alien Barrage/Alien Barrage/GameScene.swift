@@ -449,8 +449,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         guard let alienEntity = alienNode.userData?["entity"] as? AlienEntity else { return }
 
-        let isDead = alienEntity.healthComponent.takeDamage(1)
-
         // Spark effect at impact — swooping aliens are already in world coords
         let impactPos: CGPoint
         if alienEntity.isSwooping {
@@ -460,6 +458,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         } else {
             impactPos = alienNode.position
         }
+
+        // All aliens die in one hit
+        let isDead = alienEntity.healthComponent.takeDamage(alienEntity.healthComponent.currentHP)
         ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene!)
 
         if isDead {
@@ -913,10 +914,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         swoopingAliens.removeAll()
         swoopTimer = 0
 
-        // Reset timers
+        // Reset timers (UFO timer carries across levels so it eventually fires)
         enemyFireTimer = 0
-        ufoSpawnTimer = 0
-        nextUfoSpawnInterval = randomUFOInterval()
 
         // Create new formation (setupAliens uses LevelManager)
         setupAliens()
