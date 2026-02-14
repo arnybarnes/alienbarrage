@@ -35,7 +35,7 @@ enum ExplosionEffect {
         explosionNode.run(SKAction.sequence([frameAnimation, hold, remove]))
     }
 
-    private static func spawnScorePopup(at position: CGPoint, in scene: SKScene, scoreValue: Int) {
+    static func spawnScorePopup(at position: CGPoint, in scene: SKScene, scoreValue: Int) {
         guard scoreValue > 0 else { return }
 
         let popupNode = SKLabelNode(fontNamed: "Menlo-Bold")

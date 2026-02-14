@@ -9,11 +9,16 @@ class ScoreManager {
 
     private(set) var currentScore: Int = 0
     private(set) var highScore: Int = 0
+    var scoreMultiplier: Double = 1.0
 
     var onScoreChanged: ((Int) -> Void)?
 
+    func scaledValue(_ points: Int) -> Int {
+        Int(round(Double(points) * scoreMultiplier))
+    }
+
     func addPoints(_ points: Int) {
-        currentScore += points
+        currentScore += scaledValue(points)
         if currentScore > highScore {
             highScore = currentScore
         }

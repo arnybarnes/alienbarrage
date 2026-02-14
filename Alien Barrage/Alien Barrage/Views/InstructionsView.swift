@@ -30,13 +30,13 @@ struct InstructionsView: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         section("CONTROLS",
-                            "Touch and drag to move your ship. Ship fires automatically while touching the screen.")
+                            "Touch and drag to move your ship. Your ship fires automatically.")
                         section("OBJECTIVE",
                             "Destroy all aliens to advance to the next level. Don't let them reach the bottom!")
                         section("ENEMIES",
-                            "Aliens shoot plasma balls downward. A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
+                            "Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
                         section("SCORING",
-                            "Small aliens = 100 pts. Large aliens = 200 pts (take 2 hits). Score is displayed at the top of the screen.")
+                            "Small aliens = 100 pts. Large aliens = 200 pts (take 2 hits). Collecting a powerup = 50 pts.")
                         section("LIVES",
                             "Start with 3 lives (varies by difficulty). Getting hit costs a life. Brief invulnerability after respawn.")
 
@@ -58,7 +58,7 @@ struct InstructionsView: View {
                                    desc: "Instantly adds one life")
 
                         section("DIFFICULTY",
-                            "Each level adds more aliens, faster movement, and quicker enemy fire. Adjust base difficulty in Settings.")
+                            "Each level adds more aliens, faster movement, and quicker enemy fire. Adjust difficulty and fire speed in Settings. Harder difficulty and slower fire speed increase your score multiplier.")
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 40)
