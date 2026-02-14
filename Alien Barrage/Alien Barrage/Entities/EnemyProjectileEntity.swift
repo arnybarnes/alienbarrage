@@ -73,9 +73,10 @@ class EnemyProjectileEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Move downward and remove when off-screen
+        // Move downward and remove when off-screen (speed scales with screen height)
         let distance = position.y + EnemyProjectileEntity.bulletSize.height
-        let duration = TimeInterval(distance / GameConstants.enemyBulletSpeed)
+        let speed = GameConstants.enemyBulletSpeed * GameConstants.heightRatio
+        let duration = TimeInterval(distance / speed)
         let moveDown = SKAction.moveBy(x: 0, y: -distance, duration: duration)
         let remove = SKAction.removeFromParent()
         node.run(SKAction.sequence([moveDown, remove]))

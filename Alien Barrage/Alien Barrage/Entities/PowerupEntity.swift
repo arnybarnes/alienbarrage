@@ -105,9 +105,10 @@ class PowerupEntity: GKEntity {
             node.run(SKAction.repeatForever(animate), withKey: "powerupSpin3D")
         }
 
-        // Fall downward
+        // Fall downward (speed scales with screen height)
         let distance = position.y + PowerupEntity.powerupSize.height
-        let duration = TimeInterval(distance / GameConstants.powerupFallSpeed)
+        let speed = GameConstants.powerupFallSpeed * GameConstants.heightRatio
+        let duration = TimeInterval(distance / speed)
         let moveDown = SKAction.moveBy(x: 0, y: -distance, duration: duration)
         let remove = SKAction.removeFromParent()
         node.run(SKAction.sequence([moveDown, remove]))

@@ -22,6 +22,7 @@ class AlienFormation {
     private let baseSpeed: CGFloat
     private let totalAliens: Int
     private let sceneWidth: CGFloat
+    private let heightRatio: CGFloat
     private var justReversed: Bool = false
 
     /// Number of aliens currently swooping (removed from grid but still alive)
@@ -39,20 +40,22 @@ class AlienFormation {
         self.rows = rows
         self.cols = cols
         self.sceneWidth = sceneSize.width
-        self.baseSpeed = GameConstants.alienBaseSpeed * speedMultiplier
-        self.speed = GameConstants.alienBaseSpeed * speedMultiplier
+        let scaledSpeed = GameConstants.alienBaseSpeed * speedMultiplier * GameConstants.widthRatio
+        self.baseSpeed = scaledSpeed
+        self.speed = scaledSpeed
         self.totalAliens = rows * cols
         self.formationNode = SKNode()
         self.aliens = []
 
         // Calculate spacing that ensures the formation fits with room to move.
-        // Available width = sceneWidth minus edge margins minus largest alien width minus movement buffer.
-        let edgeMargin: CGFloat = 10.0
+        let widthRatio = sceneSize.width / 390.0
+        self.heightRatio = sceneSize.height / 844.0
+        let edgeMargin: CGFloat = 10.0 * widthRatio
         let maxAlienHalfWidth: CGFloat = max(AlienType.large.size.width, AlienType.small.size.width) / 2.0
-        let movementBuffer: CGFloat = 40.0
+        let movementBuffer: CGFloat = 40.0 * widthRatio
         let maxGridWidth = sceneSize.width - 2 * (edgeMargin + maxAlienHalfWidth) - movementBuffer
         let spacingX: CGFloat = cols > 1
-            ? min(GameConstants.alienSpacingX, maxGridWidth / CGFloat(cols - 1))
+            ? min(GameConstants.alienSpacingX * widthRatio, maxGridWidth / CGFloat(cols - 1))
             : 0
 
         // Build the grid
@@ -67,7 +70,7 @@ class AlienFormation {
 
                 // Position within the formation (row 0 = top)
                 let x = CGFloat(col) * spacingX
-                let y = -CGFloat(row) * GameConstants.alienSpacingY
+                let y = -CGFloat(row) * GameConstants.alienSpacingY * heightRatio
                 alien.spriteComponent.node.position = CGPoint(x: x, y: y)
 
                 formationNode.addChild(alien.spriteComponent.node)
@@ -80,7 +83,7 @@ class AlienFormation {
         // Center the formation horizontally
         let gridWidth = CGFloat(cols - 1) * spacingX
         let startX = (sceneSize.width - gridWidth) / 2.0
-        let startY = sceneSize.height - 160
+        let startY = sceneSize.height * 0.81
 
         formationNode.position = CGPoint(x: startX, y: startY)
     }
@@ -97,7 +100,7 @@ class AlienFormation {
             justReversed = false
         } else if shouldReverseDirection() {
             direction *= -1
-            formationNode.position.y -= GameConstants.alienStepDown
+            formationNode.position.y -= GameConstants.alienStepDown * heightRatio
             justReversed = true
         }
     }
@@ -189,6 +192,46 @@ class AlienFormation {
     /// Called when a swooping alien is destroyed or flies off-screen.
     func swooperDestroyed() {
         swoopingCount = max(0, swoopingCount - 1)
+    }
+
+    /// Animates aliens appearing one-by-one in random order with a grow-bounce effect.
+    /// Calls `completion` when all aliens have finished appearing.
+    func animateEntrance(completion: @escaping () -> Void) {
+        // Collect all alive alien nodes
+        var allAliens: [SKSpriteNode] = []
+        for row in aliens {
+            for alien in row {
+                guard let alien = alien, alien.isAlive else { continue }
+                allAliens.append(alien.spriteComponent.node)
+            }
+        }
+        allAliens.shuffle()
+
+        // Hide all initially
+        for node in allAliens {
+            node.setScale(0)
+        }
+
+        // Stagger reveal: each alien gets a small delay offset
+        let staggerInterval: TimeInterval = 0.04
+        for (i, node) in allAliens.enumerated() {
+            let delay = TimeInterval(i) * staggerInterval
+            let appear = SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.scale(to: 1.2, duration: 0.15),
+                SKAction.scale(to: 0.9, duration: 0.1),
+                SKAction.scale(to: 1.05, duration: 0.1),
+                SKAction.scale(to: 1.0, duration: 0.1),
+            ])
+            node.run(appear, withKey: "alienEntrance")
+        }
+
+        // Total duration: last alien's delay + bounce time
+        let totalDuration = TimeInterval(allAliens.count) * staggerInterval + 0.45
+        formationNode.run(SKAction.sequence([
+            SKAction.wait(forDuration: totalDuration),
+            SKAction.run { completion() }
+        ]), withKey: "entranceComplete")
     }
 
     /// Returns the world Y position of the lowest alive alien

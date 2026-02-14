@@ -4,13 +4,21 @@
 //
 
 import SpriteKit
+import UIKit
 
 enum GameConstants {
 
-    // MARK: - Scene
-    static let sceneWidth: CGFloat = 390
-    static let sceneHeight: CGFloat = 844
-    static let sceneSize = CGSize(width: sceneWidth, height: sceneHeight)
+    // MARK: - Scene (dynamic — reads actual screen size)
+    static var sceneWidth: CGFloat { UIScreen.main.bounds.width }
+    static var sceneHeight: CGFloat { UIScreen.main.bounds.height }
+    static var sceneSize: CGSize { CGSize(width: sceneWidth, height: sceneHeight) }
+
+    // MARK: - HUD Scaling (scales up on larger screens, never below 1.0)
+    static var hudScale: CGFloat { max(1.0, min(sceneWidth, sceneHeight) / 844.0) }
+
+    // MARK: - Speed Scaling Ratios (consistent travel time across screen sizes)
+    static var heightRatio: CGFloat { sceneHeight / 844.0 }
+    static var widthRatio: CGFloat { sceneWidth / 390.0 }
 
     // MARK: - Physics Categories (bitmask)
     struct PhysicsCategory {

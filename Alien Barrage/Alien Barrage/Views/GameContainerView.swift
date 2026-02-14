@@ -8,42 +8,49 @@ struct GameContainerView: View {
     @State private var scene: GameScene?
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            Color.black.ignoresSafeArea()
+        GeometryReader { geo in
+            let sceneSize = geo.size
 
-            if let scene = scene {
-                SpriteView(scene: scene)
-                    .ignoresSafeArea()
-            }
+            ZStack(alignment: .bottomTrailing) {
+                Color.black.ignoresSafeArea()
 
-            // Exit button
-            Button {
-                let score = scene?.currentScore ?? 0
-                scene?.isPaused = true
-                HighScoreManager.shared.submit(score: score)
-                onGameOver(score)
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundColor(.white.opacity(0.5))
-                    .frame(width: 30, height: 30)
-                    .background(Circle().fill(Color.black.opacity(0.4)))
+                if let scene = scene {
+                    SpriteView(scene: scene)
+                        .ignoresSafeArea()
+                }
+
+                // Exit button
+                Button {
+                    let score = scene?.currentScore ?? 0
+                    scene?.isPaused = true
+                    HighScoreManager.shared.submit(score: score)
+                    onGameOver(score)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white.opacity(0.5))
+                        .frame(width: 30, height: 30)
+                        .background(Circle().fill(Color.black.opacity(0.4)))
+                }
+                .padding(.bottom, 10)
+                .padding(.trailing, 12)
             }
-            .padding(.top, 10)
-            .padding(.trailing, 12)
-        }
-        .onAppear {
-            let newScene = GameScene(size: GameConstants.sceneSize, settings: gameSettings)
-            newScene.scaleMode = .aspectFill
-            newScene.anchorPoint = CGPoint(x: 0, y: 0)
-            newScene.onGameOver = { score in
-                onGameOver(score)
+            .onAppear {
+                let newScene = GameScene(size: sceneSize, settings: gameSettings)
+                newScene.scaleMode = .resizeFill
+                newScene.anchorPoint = CGPoint(x: 0, y: 0)
+                newScene.onGameOver = { score in
+                    onGameOver(score)
+                }
+                scene = newScene
             }
-            scene = newScene
         }
+        .ignoresSafeArea()
         .onDisappear {
             scene = nil
         }
         .statusBarHidden(true)
+        .defersSystemGestures(on: .bottom)
+        .persistentSystemOverlays(.hidden)
     }
 }

@@ -32,6 +32,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var playerEntity: PlayerEntity!
     private var touchStartLocation: CGPoint?
     private var playerStartX: CGFloat = 0
+    private var playerStartY: CGFloat = 0
 
     // Aliens
     private var alienFormation: AlienFormation?
@@ -63,6 +64,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var currentSwoopInterval: TimeInterval = GameConstants.swoopBaseInterval
     private var maxSimultaneousSwoops: Int = 1
 
+    // Difficulty scaling for wider screens (more columns)
+    private var columnDifficultyRatio: Double = 1.0
+
+    // Respawn state — pauses enemy attacks during glitch-in animation
+    private var isRespawning: Bool = false
+
     // Overlay
     private var overlayNode: SKNode?
 
@@ -90,6 +97,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupScoreDisplay()
         setupLivesDisplay()
         nextUfoSpawnInterval = randomUFOInterval()
+
+        // Animate first level entrance
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
 
         // Pause on background
         NotificationCenter.default.addObserver(
@@ -131,12 +145,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func setupAliens() {
         let config = LevelManager.config(forLevel: currentLevel)
         let fireIntervalMult = settings?.effectiveEnemyFireIntervalMultiplier ?? 1.0
-        currentEnemyFireInterval = config.fireInterval * fireIntervalMult
         let speedMult = settings?.effectiveAlienSpeedMultiplier ?? 1.0
         let speedMultiplier = (config.baseSpeed / GameConstants.alienBaseSpeed) * speedMult
+
+        // Bonus columns on wider screens (iPad, Plus models)
+        let bonusCols = max(0, Int((size.width - 390) / 130))
+        let totalCols = config.cols + bonusCols
+
+        // Difficulty scaling: more columns = slower fire/swoop to keep bullet density consistent
+        let colRatio = CGFloat(totalCols) / CGFloat(config.cols)
+        columnDifficultyRatio = Double(colRatio)
+
+        currentEnemyFireInterval = config.fireInterval * fireIntervalMult * Double(colRatio)
+
         alienFormation = AlienFormation(
             rows: config.rows,
-            cols: config.cols,
+            cols: totalCols,
             sceneSize: size,
             speedMultiplier: speedMultiplier,
             alienHPBonus: config.alienHPBonus
@@ -149,7 +173,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentSwoopInterval = max(
             GameConstants.swoopMinInterval,
             GameConstants.swoopBaseInterval - Double(currentLevel - 1) * GameConstants.swoopIntervalDecreasePerLevel
-        ) / difficultyMult
+        ) / difficultyMult * Double(colRatio)
         swoopTimer = 0
     }
 
@@ -172,6 +196,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Bullet Spawning
 
     private func spawnPlayerBullet() {
+        guard !isRespawning else { return }
         AudioManager.shared.play(GameConstants.Sound.playerShoot)
         if GameConstants.Haptic.playerShoot { HapticManager.shared.lightImpact() }
 
@@ -236,7 +261,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Powerup Spawning
 
     private func spawnPowerup(at position: CGPoint) {
-        let type = PowerupType.random()
+        var type = PowerupType.random()
+        if type == .extraLife && playerEntity.healthComponent.currentHP >= 3 {
+            // Re-roll once to avoid extra life when player already has 3+ ships
+            type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
+        }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
         worldNode.addChild(powerup.spriteComponent.node)
         entities.append(powerup)
@@ -249,22 +278,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         path.move(to: start)
 
         // Determine which side to curve away from — opposite to player
+        let wr = GameConstants.widthRatio
+        let hr = GameConstants.heightRatio
         let offsetDir: CGFloat = start.x < size.width / 2 ? -1 : 1
-        let lateralSwing = CGFloat.random(in: 60...120) * offsetDir
+        let lateralSwing = CGFloat.random(in: 60...120) * wr * offsetDir
 
         // Control point 1: curve outward from center
         let cp1 = CGPoint(
             x: start.x + lateralSwing,
-            y: start.y - CGFloat.random(in: 80...160)
+            y: start.y - CGFloat.random(in: 80...160) * hr
         )
         // Control point 2: sweep toward player
         let cp2 = CGPoint(
-            x: playerX + CGFloat.random(in: -30...30),
-            y: CGFloat.random(in: 100...200)
+            x: playerX + CGFloat.random(in: -30...30) * wr,
+            y: CGFloat.random(in: 100...200) * hr
         )
         // End point: below screen
         let end = CGPoint(
-            x: playerX + CGFloat.random(in: -20...20),
+            x: playerX + CGFloat.random(in: -20...20) * wr,
             y: GameConstants.swoopDestroyBelowY
         )
 
@@ -295,7 +326,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Approximate path length for duration
         let boundingBox = swoopPath.boundingBox
         let approxLength = hypot(boundingBox.width, boundingBox.height) * 1.4
-        let duration = TimeInterval(approxLength / GameConstants.swoopSpeed)
+        let swoopSpeed = GameConstants.swoopSpeed * GameConstants.heightRatio
+        let duration = TimeInterval(approxLength / swoopSpeed)
 
         let follow = SKAction.follow(swoopPath, asOffset: false, orientToPath: false, duration: duration)
         follow.timingMode = .easeIn
@@ -359,6 +391,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first else { return }
         touchStartLocation = touch.location(in: self)
         playerStartX = playerEntity.spriteComponent.node.position.x
+        playerStartY = playerEntity.spriteComponent.node.position.y
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -366,7 +399,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let touch = touches.first, let startLoc = touchStartLocation else { return }
         let currentLoc = touch.location(in: self)
         let deltaX = currentLoc.x - startLoc.x
-        playerEntity.movementComponent.move(toX: playerStartX + deltaX)
+        let deltaY = currentLoc.y - startLoc.y
+        playerEntity.movementComponent.move(toX: playerStartX + deltaX, toY: playerStartY + deltaY)
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -473,7 +507,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
 
@@ -491,7 +525,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 scoreManager.addPoints(scoreValue)
 
                 // Chance to drop powerup
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance {
+                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
             }
@@ -527,7 +561,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isDead {
             handlePlayerDeath()
         } else {
-            playerEntity.makeInvulnerable(duration: GameConstants.playerInvulnerabilityDuration)
+            respawnPlayer()
         }
     }
 
@@ -574,9 +608,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         playerEntity.applyPowerup(powerup.type)
 
-        // Update lives display if extra life
+        // Update lives display if extra life + flash message
         if powerup.type == .extraLife {
             livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
+            flashExtraLifeMessage()
         }
 
         // Score
@@ -619,7 +654,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isDead {
             handlePlayerDeath()
         } else {
-            playerEntity.makeInvulnerable(duration: GameConstants.playerInvulnerabilityDuration)
+            respawnPlayer()
         }
     }
 
@@ -668,28 +703,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.zPosition = -1
         overlay.addChild(bg)
 
+        let hs = GameConstants.hudScale
+
         let label = makeOverlayLabel(text: "GAME OVER", fontSize: 48)
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40)
+        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40 * hs)
         overlay.addChild(label)
 
         let scoreLabel = makeOverlayLabel(text: "SCORE: \(scoreManager.currentScore)", fontSize: 28)
-        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20)
+        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
         overlay.addChild(scoreLabel)
 
         if isNewHigh {
             let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
-            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60)
+            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60 * hs)
             overlay.addChild(highLabel)
         }
-
-        let buttonSize = CGSize(width: 200, height: 50)
+        let buttonSize = CGSize(width: 200 * hs, height: 50 * hs)
         let button = SKSpriteNode(color: SKColor(red: 0.15, green: 0.5, blue: 0.15, alpha: 1.0), size: buttonSize)
-        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110)
+        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110 * hs)
         button.name = "continueButton"
 
         let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
-        buttonLabel.text = "CONTINUE"
-        buttonLabel.fontSize = 22
+        buttonLabel.text = "MENU"
+        buttonLabel.fontSize = 22 * hs
         buttonLabel.fontColor = .white
         buttonLabel.verticalAlignmentMode = .center
         buttonLabel.horizontalAlignmentMode = .center
@@ -700,6 +736,86 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         addChild(overlay)
         overlayNode = overlay
+    }
+
+    // MARK: - Respawn (hit but not dead)
+
+    private func respawnPlayer() {
+        isRespawning = true
+        playerEntity.shootingComponent.isFiring = false
+        playerEntity.spriteComponent.node.alpha = 0
+
+        // Clear all bullets, powerups, and swooping aliens
+        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
+            node.removeFromParent()
+        }
+
+        // Remove swooping aliens
+        for swooper in swoopingAliens {
+            swooper.isAlive = false
+            swooper.isSwooping = false
+            swooper.spriteComponent.node.removeAllActions()
+            swooper.spriteComponent.node.removeFromParent()
+            alienFormation?.swooperDestroyed()
+        }
+        swoopingAliens.removeAll()
+
+        // Remove UFO if active
+        removeUFO()
+
+        // Freeze the game world
+        worldNode.isPaused = true
+
+        // Show "SHIP DESTROYED" message with remaining lives
+        let lives = playerEntity.healthComponent.currentHP
+        let hs = GameConstants.hudScale
+
+        let msgNode = SKNode()
+        msgNode.zPosition = GameConstants.ZPosition.overlay
+
+        let destroyedLabel = makeOverlayLabel(text: "SHIP DESTROYED", fontSize: 36)
+        destroyedLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 20 * hs)
+        msgNode.addChild(destroyedLabel)
+
+        let livesText = lives == 1 ? "1 SHIP REMAINING" : "\(lives) SHIPS REMAINING"
+        let livesLabel = makeOverlayLabel(text: livesText, fontSize: 22)
+        livesLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
+        msgNode.addChild(livesLabel)
+
+        // Fade in
+        msgNode.alpha = 0
+        addChild(msgNode)
+        msgNode.run(SKAction.fadeIn(withDuration: 0.2))
+
+        // After a pause, remove message, unfreeze, and glitch-in
+        let showDuration: TimeInterval = 1.5
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: showDuration),
+            SKAction.run { [weak self] in
+                guard let self else { return }
+                msgNode.run(SKAction.sequence([
+                    SKAction.fadeOut(withDuration: 0.2),
+                    SKAction.removeFromParent()
+                ]))
+
+                // Unfreeze world
+                self.worldNode.isPaused = false
+
+                let respawnPos = CGPoint(x: self.size.width / 2, y: self.size.height * 0.142)
+                self.playerEntity.respawnWithGlitch(
+                    at: respawnPos,
+                    invulnerabilityDuration: GameConstants.playerInvulnerabilityDuration
+                ) { [weak self] in
+                    self?.isRespawning = false
+                }
+            }
+        ]))
     }
 
     // MARK: - Restart
@@ -752,7 +868,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyFireTimer = 0
         ufoSpawnTimer = 0
         nextUfoSpawnInterval = randomUFOInterval()
-        gameState = .playing
         scoreManager.reset()
 
         // Re-setup
@@ -760,6 +875,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
+
+        // Animate entrance
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
     }
 
     // MARK: - Level Progression
@@ -818,27 +940,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             if !remaining {
                 self.removeAction(forKey: "waitForClear")
-                self.removeUFO()
+                self.removeAction(forKey: "waitForClearTimeout")
                 self.showLevelOverlay()
 
                 let wait = SKAction.wait(forDuration: 2.5)
                 let startNext = SKAction.run { [weak self] in
                     self?.startNextLevel()
                 }
-                self.run(SKAction.sequence([wait, startNext]))
+                self.run(SKAction.sequence([wait, startNext]), withKey: "levelStart")
             }
         }
 
         let poll = SKAction.sequence([SKAction.wait(forDuration: 0.1), checkAction])
         run(SKAction.repeatForever(poll), withKey: "waitForClear")
 
-        // Safety timeout — don't wait forever
+        // Safety timeout — don't wait forever (10s accommodates UFO crossing wide screens)
         let timeout = SKAction.sequence([
-            SKAction.wait(forDuration: 3.0),
+            SKAction.wait(forDuration: 10.0),
             SKAction.run { [weak self] in
-                guard let self, self.overlayNode == nil else { return }
+                guard let self,
+                      self.overlayNode == nil,
+                      self.action(forKey: "levelStart") == nil else { return }
                 self.removeAction(forKey: "waitForClear")
-                self.removeUFO()
                 worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
                     node.removeFromParent()
                 }
@@ -850,7 +973,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let startNext = SKAction.run { [weak self] in
                     self?.startNextLevel()
                 }
-                self.run(SKAction.sequence([wait, startNext]))
+                self.run(SKAction.sequence([wait, startNext]), withKey: "levelStart")
             }
         ])
         run(timeout, withKey: "waitForClearTimeout")
@@ -871,12 +994,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bg.run(SKAction.fadeAlpha(to: 0.5, duration: 0.3))
         overlay.addChild(bg)
 
+        let hs = GameConstants.hudScale
+
         let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
-        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25)
+        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25 * hs)
         overlay.addChild(levelLabel)
 
         let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
-        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35)
+        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35 * hs)
         overlay.addChild(numberLabel)
 
         // Bounce-in animation for text
@@ -921,11 +1046,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
 
         // Reset player position
-        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
+        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: size.height * 0.142)
 
-        gameState = .playing
+        // Pause firing and animate aliens appearing
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
 
-        playerEntity.shootingComponent.isFiring = true
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
     }
 
     // MARK: - UFO
@@ -953,9 +1082,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - UI Helpers
 
     private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
+        let scaledSize = fontSize * GameConstants.hudScale
         let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
         label.text = text
-        label.fontSize = fontSize
+        label.fontSize = scaledSize
         label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
@@ -963,7 +1093,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Shadow/outline effect via a duplicate label behind
         let shadow = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
         shadow.text = text
-        shadow.fontSize = fontSize
+        shadow.fontSize = scaledSize
         shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
         shadow.horizontalAlignmentMode = .center
         shadow.verticalAlignmentMode = .center
@@ -972,6 +1102,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.addChild(shadow)
 
         return label
+    }
+
+    private func flashExtraLifeMessage() {
+        let playerPos = playerEntity.spriteComponent.node.position
+        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        label.text = "EXTRA SHIP!"
+        label.fontSize = 18 * GameConstants.hudScale
+        label.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        label.horizontalAlignmentMode = .center
+        label.verticalAlignmentMode = .top
+        label.position = CGPoint(x: playerPos.x, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
+        label.zPosition = GameConstants.ZPosition.ui
+        worldNode.addChild(label)
+
+        label.run(SKAction.sequence([
+            SKAction.wait(forDuration: 0.5),
+            SKAction.fadeOut(withDuration: 0.15),
+            SKAction.removeFromParent()
+        ]))
     }
 
     // MARK: - Update
@@ -994,14 +1143,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
 
-        if gameState == .playing {
+        if gameState == .playing && !isRespawning {
             alienFormation?.update(deltaTime: dt)
 
-            // Enemy fire timer
-            enemyFireTimer += dt
-            if enemyFireTimer >= currentEnemyFireInterval {
-                enemyFireTimer = 0
-                spawnEnemyBullet()
+            // Update player vertical ceiling: 1 ship height below lowest alien
+            if let lowestY = alienFormation?.lowestAlienY() {
+                let ceiling = lowestY - PlayerEntity.shipSize.height
+                playerEntity.movementComponent.maxY = max(playerEntity.movementComponent.minY, ceiling)
+            }
+
+            // Enemy fire timer (paused during respawn)
+            if !isRespawning {
+                enemyFireTimer += dt
+                if enemyFireTimer >= currentEnemyFireInterval {
+                    enemyFireTimer = 0
+                    spawnEnemyBullet()
+                }
             }
 
             // UFO spawn timer
@@ -1012,11 +1169,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 spawnUFO()
             }
 
-            // Swoop timer
-            swoopTimer += dt
+            // Swoop timer (paused during respawn)
+            if !isRespawning {
+                swoopTimer += dt
+            }
             if swoopTimer >= currentSwoopInterval {
                 swoopTimer = 0
                 initiateSwoop()
+            }
+
+            // Pause firing when nothing to shoot at, during respawn, or resume if UFO appears
+            let shouldFire = !isRespawning &&
+                ((alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil)
+            if shouldFire != playerEntity.shootingComponent.isFiring {
+                playerEntity.shootingComponent.isFiring = shouldFire
             }
 
             // Check if aliens reached the bottom (instant game over)

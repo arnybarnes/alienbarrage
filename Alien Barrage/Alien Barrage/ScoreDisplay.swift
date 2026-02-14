@@ -15,7 +15,7 @@ class ScoreDisplay {
         node.zPosition = GameConstants.ZPosition.ui
 
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
-        label.fontSize = 30
+        label.fontSize = 30 * GameConstants.hudScale
         label.fontColor = .white
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
@@ -23,8 +23,8 @@ class ScoreDisplay {
         node.addChild(label)
         labelNode = label
 
-        // Position at top-center of scene
-        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 770)
+        // Position at bottom-center of scene (below player ship)
+        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 30 * GameConstants.hudScale)
 
         // Show initial "0"
         update(score: 0)

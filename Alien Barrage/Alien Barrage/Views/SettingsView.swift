@@ -48,14 +48,15 @@ struct SettingsView: View {
                             .foregroundColor(.green.opacity(0.7))
 
                         HStack {
-                            Text("FAST")
+                            Text("SLOW")
                                 .font(.caption)
                                 .foregroundColor(.gray)
-                            Slider(value: $gameSettings.autofireSpeed,
-                                   in: 0.2...1.0,
-                                   step: 0.05)
+                            Slider(value: Binding(
+                                get: { 1.2 - gameSettings.autofireSpeed },
+                                set: { gameSettings.autofireSpeed = 1.2 - $0 }
+                            ), in: 0.2...1.0, step: 0.05)
                             .tint(.green)
-                            Text("SLOW")
+                            Text("FAST")
                                 .font(.caption)
                                 .foregroundColor(.gray)
                         }
