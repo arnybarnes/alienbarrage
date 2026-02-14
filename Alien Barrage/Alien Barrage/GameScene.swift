@@ -259,7 +259,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             handleGameOverTap()
             return
         }
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
 
         guard let touch = touches.first else { return }
         touchStartLocation = touch.location(in: self)
@@ -267,7 +267,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let touch = touches.first, let startLoc = touchStartLocation else { return }
         let currentLoc = touch.location(in: self)
         let deltaX = currentLoc.x - startLoc.x
@@ -275,12 +275,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         touchStartLocation = nil
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         touchStartLocation = nil
     }
 
@@ -426,7 +426,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func handlePlayerBulletHitsUFO(bulletBody: SKPhysicsBody, ufoBody: SKPhysicsBody) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let bulletNode = bulletBody.node as? SKSpriteNode,
               let ufoNode = ufoBody.node as? SKSpriteNode else { return }
 
@@ -661,8 +661,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         gameState = .levelTransition
         currentLevel += 1
-        playerEntity.shootingComponent.isFiring = false
-        playerEntity.clearPowerup()
 
         // Remove enemy bullets immediately — no reason to let them kill the player after clearing
         worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
@@ -733,6 +731,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func showLevelOverlay() {
+        playerEntity.shootingComponent.isFiring = false
+        playerEntity.clearPowerup()
+
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
@@ -853,11 +854,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let dt = currentTime - lastUpdateTime
 
-        if gameState == .playing {
+        if gameState == .playing || gameState == .levelTransition {
             for entity in entities {
                 entity.update(deltaTime: dt)
             }
 
+            // Track UFO removal (flew off-screen)
+            if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
+                ufoEntity = nil
+            }
+        }
+
+        if gameState == .playing {
             alienFormation?.update(deltaTime: dt)
 
             // Enemy fire timer
@@ -873,11 +881,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ufoSpawnTimer = 0
                 nextUfoSpawnInterval = randomUFOInterval()
                 spawnUFO()
-            }
-
-            // Track UFO removal (flew off-screen)
-            if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
-                ufoEntity = nil
             }
 
             // Check if aliens reached the bottom (instant game over)
