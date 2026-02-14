@@ -822,6 +822,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             if !remaining {
                 self.removeAction(forKey: "waitForClear")
+                self.removeAction(forKey: "waitForClearTimeout")
                 self.removeUFO()
                 self.showLevelOverlay()
 
@@ -829,7 +830,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let startNext = SKAction.run { [weak self] in
                     self?.startNextLevel()
                 }
-                self.run(SKAction.sequence([wait, startNext]))
+                self.run(SKAction.sequence([wait, startNext]), withKey: "levelStart")
             }
         }
 
@@ -840,7 +841,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let timeout = SKAction.sequence([
             SKAction.wait(forDuration: 3.0),
             SKAction.run { [weak self] in
-                guard let self, self.overlayNode == nil else { return }
+                guard let self,
+                      self.overlayNode == nil,
+                      self.action(forKey: "levelStart") == nil else { return }
                 self.removeAction(forKey: "waitForClear")
                 self.removeUFO()
                 worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
@@ -854,7 +857,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 let startNext = SKAction.run { [weak self] in
                     self?.startNextLevel()
                 }
-                self.run(SKAction.sequence([wait, startNext]))
+                self.run(SKAction.sequence([wait, startNext]), withKey: "levelStart")
             }
         ])
         run(timeout, withKey: "waitForClearTimeout")
