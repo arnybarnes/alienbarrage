@@ -135,9 +135,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         currentEnemyFireInterval = config.fireInterval * fireIntervalMult
         let speedMult = settings?.effectiveAlienSpeedMultiplier ?? 1.0
         let speedMultiplier = (config.baseSpeed / GameConstants.alienBaseSpeed) * speedMult
+
+        // Bonus columns on wider screens (iPad, Plus models)
+        let bonusCols = max(0, Int((size.width - 390) / 130))
+        let totalCols = config.cols + bonusCols
+
         alienFormation = AlienFormation(
             rows: config.rows,
-            cols: config.cols,
+            cols: totalCols,
             sceneSize: size,
             speedMultiplier: speedMultiplier,
             alienHPBonus: config.alienHPBonus

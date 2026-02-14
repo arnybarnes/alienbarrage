@@ -22,6 +22,7 @@ class AlienFormation {
     private let baseSpeed: CGFloat
     private let totalAliens: Int
     private let sceneWidth: CGFloat
+    private let heightRatio: CGFloat
     private var justReversed: Bool = false
 
     /// Number of aliens currently swooping (removed from grid but still alive)
@@ -46,13 +47,14 @@ class AlienFormation {
         self.aliens = []
 
         // Calculate spacing that ensures the formation fits with room to move.
-        // Available width = sceneWidth minus edge margins minus largest alien width minus movement buffer.
-        let edgeMargin: CGFloat = 10.0
+        let widthRatio = sceneSize.width / 390.0
+        self.heightRatio = sceneSize.height / 844.0
+        let edgeMargin: CGFloat = 10.0 * widthRatio
         let maxAlienHalfWidth: CGFloat = max(AlienType.large.size.width, AlienType.small.size.width) / 2.0
-        let movementBuffer: CGFloat = 40.0
+        let movementBuffer: CGFloat = 40.0 * widthRatio
         let maxGridWidth = sceneSize.width - 2 * (edgeMargin + maxAlienHalfWidth) - movementBuffer
         let spacingX: CGFloat = cols > 1
-            ? min(GameConstants.alienSpacingX, maxGridWidth / CGFloat(cols - 1))
+            ? min(GameConstants.alienSpacingX * widthRatio, maxGridWidth / CGFloat(cols - 1))
             : 0
 
         // Build the grid
@@ -67,7 +69,7 @@ class AlienFormation {
 
                 // Position within the formation (row 0 = top)
                 let x = CGFloat(col) * spacingX
-                let y = -CGFloat(row) * GameConstants.alienSpacingY
+                let y = -CGFloat(row) * GameConstants.alienSpacingY * heightRatio
                 alien.spriteComponent.node.position = CGPoint(x: x, y: y)
 
                 formationNode.addChild(alien.spriteComponent.node)
@@ -80,7 +82,7 @@ class AlienFormation {
         // Center the formation horizontally
         let gridWidth = CGFloat(cols - 1) * spacingX
         let startX = (sceneSize.width - gridWidth) / 2.0
-        let startY = sceneSize.height - 160
+        let startY = sceneSize.height * 0.81
 
         formationNode.position = CGPoint(x: startX, y: startY)
     }
@@ -97,7 +99,7 @@ class AlienFormation {
             justReversed = false
         } else if shouldReverseDirection() {
             direction *= -1
-            formationNode.position.y -= GameConstants.alienStepDown
+            formationNode.position.y -= GameConstants.alienStepDown * heightRatio
             justReversed = true
         }
     }
