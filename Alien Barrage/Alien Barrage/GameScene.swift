@@ -264,8 +264,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnPowerup(at position: CGPoint) {
         var type = PowerupType.random()
-        if type == .extraLife && playerEntity.healthComponent.currentHP >= 5 {
-            // Re-roll once to avoid extra life when player already has 5+ ships
+        if type == .extraLife && playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
+            // Re-roll once to avoid extra life when player is at max ships
             type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
         }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
@@ -1091,7 +1091,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
         let scaledSize = fontSize * GameConstants.hudScale
-        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.text = text
         label.fontSize = scaledSize
         label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
@@ -1099,7 +1099,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
 
         // Shadow/outline effect via a duplicate label behind
-        let shadow = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let shadow = SKLabelNode(fontNamed: "Menlo-Bold")
         shadow.text = text
         shadow.fontSize = scaledSize
         shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
@@ -1114,7 +1114,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func flashExtraLifeMessage() {
         let playerPos = playerEntity.spriteComponent.node.position
-        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.text = "EXTRA SHIP!"
         label.fontSize = 18 * GameConstants.hudScale
         label.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
