@@ -13,17 +13,10 @@ struct MenuView: View {
             Color.black.ignoresSafeArea()
 
             GeometryReader { geo in
-                VStack(spacing: 20) {
-                    // App icon — fills top half width
-                    Image("AppIcon")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: geo.size.width * 0.65)
-                        .frame(maxHeight: geo.size.height * 0.35)
-                        .padding(.top, geo.size.height * 0.05)
-
-                    Text("ALIEN BARRAGE")
-                        .font(.system(size: 36, weight: .heavy, design: .rounded))
+                VStack(spacing: 12) {
+                    Text("ALIEN\nBARRAGE")
+                        .font(.custom("Nosifer-Regular", size: 42))
+                        .multilineTextAlignment(.center)
                         .foregroundStyle(
                             LinearGradient(
                                 colors: [Color.green, Color.green.opacity(0.6)],
@@ -35,6 +28,14 @@ struct MenuView: View {
                         .animation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true),
                                    value: titlePulse)
                         .onAppear { titlePulse = true }
+                        .padding(.top, geo.size.height * 0.04)
+
+                    // App icon
+                    Image("AppIcon")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: geo.size.width * 0.65)
+                        .frame(maxHeight: geo.size.height * 0.30)
 
                     Text("HIGH SCORE: \(HighScoreManager.shared.highScore)")
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
