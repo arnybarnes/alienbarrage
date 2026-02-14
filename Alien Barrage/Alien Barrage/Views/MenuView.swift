@@ -1,4 +1,5 @@
 import SwiftUI
+import AVKit
 
 struct MenuView: View {
     let onStart: () -> Void
@@ -7,6 +8,8 @@ struct MenuView: View {
     let lastScore: Int
 
     @State private var titlePulse = false
+    @State private var player: AVPlayer?
+    @State private var isPressing = false
 
     var body: some View {
         ZStack {
@@ -30,12 +33,28 @@ struct MenuView: View {
                         .onAppear { titlePulse = true }
                         .padding(.top, geo.size.height * 0.04)
 
-                    // App icon
-                    Image("AppIcon")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
+                    // Video — plays only while pressing and holding
+                    AlienVideoView(player: player, isPressing: $isPressing)
                         .frame(width: geo.size.width * 0.65)
                         .frame(maxHeight: geo.size.height * 0.30)
+                        .clipped()
+                        .gesture(
+                            DragGesture(minimumDistance: 0)
+                                .onChanged { _ in
+                                    if !isPressing {
+                                        isPressing = true
+                                        player?.isMuted = false
+                                        player?.seek(to: .zero)
+                                        player?.play()
+                                    }
+                                }
+                                .onEnded { _ in
+                                    isPressing = false
+                                    player?.pause()
+                                    player?.isMuted = true
+                                    player?.seek(to: .zero)
+                                }
+                        )
 
                     Text("HIGH SCORE: \(HighScoreManager.shared.highScore)")
                         .font(.system(size: 18, weight: .semibold, design: .monospaced))
@@ -59,6 +78,13 @@ struct MenuView: View {
                 .padding()
             }
         }
+        .onAppear {
+            if player == nil, let url = Bundle.main.url(forResource: "alien", withExtension: "mp4") {
+                let avPlayer = AVPlayer(url: url)
+                avPlayer.isMuted = true
+                player = avPlayer
+            }
+        }
     }
 
     private func menuButton(_ title: String, action: @escaping () -> Void) -> some View {
@@ -74,5 +100,30 @@ struct MenuView: View {
                         .background(Color.green.opacity(0.08).clipShape(RoundedRectangle(cornerRadius: 8)))
                 )
         }
+    }
+}
+
+/// UIViewRepresentable wrapper for AVPlayerLayer — no controls, aspect-fill
+struct AlienVideoView: UIViewRepresentable {
+    let player: AVPlayer?
+    @Binding var isPressing: Bool
+
+    func makeUIView(context: Context) -> UIView {
+        let view = PlayerUIView()
+        view.backgroundColor = .black
+        view.playerLayer.videoGravity = .resizeAspect
+        view.playerLayer.player = player
+        return view
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        if let view = uiView as? PlayerUIView {
+            view.playerLayer.player = player
+        }
+    }
+
+    class PlayerUIView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
     }
 }
