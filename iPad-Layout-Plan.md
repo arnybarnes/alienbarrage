@@ -1,5 +1,30 @@
 # iPad Layout Optimization Plan
 
+## Rules for Claude
+
+1. **Keep the Status Summary updated.** After completing work on any phase, update the status table below to reflect the current state before doing anything else.
+2. **Stop after each phase.** After finishing a phase, do NOT proceed to the next. Instead, present the user with a list of what to test and what to look for in the simulator. Wait for user confirmation before starting the next phase.
+
+---
+
+## Status Summary
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| Phase 1: Dynamic Scene Size | Not started | |
+| Phase 2: Element Sizing Strategy | Not started | |
+| Phase 3: Alien Formation Layout | Not started | |
+| Phase 4: HUD Repositioning | Not started | |
+| Phase 5: Player & Movement Bounds | Not started | |
+| Phase 6: Gameplay Speed Scaling | Not started | |
+| Phase 7: Difficulty Balancing | Not started | |
+| Phase 8: Particle Effects | Not started | |
+| Phase 9: SwiftUI Menus & Screens | Not started | |
+| Phase 10: Safe Area Handling | Not started | |
+| Phase 11: Landscape Support | Not started | |
+
+---
+
 ## Design Decisions
 
 | Decision | Choice |
@@ -23,7 +48,7 @@ The game uses a **fixed 390x844 scene** (iPhone 14/15 dimensions) with `.aspectF
 
 ---
 
-## 1. Dynamic Scene Size
+## Phase 1: Dynamic Scene Size
 
 **File: `Constants.swift`**
 
@@ -47,9 +72,16 @@ On non-390x844 iPhones, this means:
 - Plus/Max models get a slightly wider battlefield
 - SE gets a shorter battlefield with compressed vertical spacing
 
+### After this phase, test:
+- iPhone 16 simulator (390x844): game should look identical to current build
+- iPad simulator (portrait): scene fills the full screen, no black bars
+- iPhone SE simulator: scene fills the screen, no letterboxing
+- iPhone Plus simulator: scene fills the screen, wider play area
+- Verify the game launches and basic gameplay works on each — elements will be mispositioned but not crashing
+
 ---
 
-## 2. Element Sizing Strategy
+## Phase 2: Element Sizing Strategy
 
 **Game elements stay at iPhone sizes** — the ship, aliens, bullets, powerups, and UFO keep their current point dimensions (92x71 ship, 56x43 large alien, etc.). On iPad the playing field is physically larger, giving the player more room to maneuver and making the game feel more expansive.
 
@@ -58,9 +90,14 @@ On non-390x844 iPhones, this means:
 - Apply to: score font size, lives icon size, overlay text, buttons
 - Gameplay sprites are **not** scaled
 
+### After this phase, test:
+- iPad: HUD text (score, lives) should be noticeably larger than on iPhone — readable from normal tablet distance
+- iPhone 16: HUD should look exactly the same as before (`hudScale` = 1.0)
+- iPad: gameplay sprites (ship, aliens, bullets) should be the same pixel size as on iPhone — they look small relative to the screen, and that's intentional
+
 ---
 
-## 3. Alien Formation Layout
+## Phase 3: Alien Formation Layout
 
 **File: `AlienFormation.swift`**
 
@@ -73,9 +110,16 @@ iPad gets **more columns at all levels** to fill the wider screen.
 - Formation start Y: `sceneHeight * 0.81` instead of `sceneHeight - 160`
 - Step-down distance: proportional to scene height
 
+### After this phase, test:
+- iPad portrait: alien grid should be wider (more columns) and well-centered, not bunched to one side
+- iPad: aliens should march side-to-side and reach both edges without going off-screen
+- iPhone 16: column count and spacing should be identical to the current build
+- Play through 2-3 levels on iPad to verify formation scales with level progression
+- Check that aliens don't overlap or clip the HUD at the top
+
 ---
 
-## 4. HUD Repositioning
+## Phase 4: HUD Repositioning
 
 ### Score Display
 **File: `ScoreDisplay.swift`**
@@ -99,9 +143,17 @@ iPad gets **more columns at all levels** to fill the wider screen.
 - Continue button: `200x50 * hudScale`
 - Vertical offsets between overlay elements: scale proportionally
 
+### After this phase, test:
+- iPad: score should be near the top center, not floating in the middle of the screen
+- iPad: lives icons should be top-left, appropriately sized (not tiny)
+- iPhone 16: HUD positions should be identical to current build
+- Trigger game over: overlay text and continue button should be centered and appropriately sized on both devices
+- Trigger level transition: level text should be centered and readable on both devices
+- Check that HUD elements don't overlap the alien formation on any device
+
 ---
 
-## 5. Player & Movement Bounds
+## Phase 5: Player & Movement Bounds
 
 **Files: `PlayerEntity.swift`, `MovementComponent.swift`, `GameScene.swift`**
 
@@ -111,9 +163,15 @@ iPad gets **more columns at all levels** to fill the wider screen.
 - Movement clamp: already uses `sceneWidth - spriteHalfWidth` — works automatically
 - Thrust particle offset: unchanged (relative to ship size)
 
+### After this phase, test:
+- iPad: player ship should sit near the bottom of the screen, proportionally same position as iPhone
+- iPad: drag the ship to both edges — it should clamp correctly and not go off-screen
+- iPhone 16: ship position and movement should be identical to current build
+- Die and respawn: ship should reappear at the correct proportional position on both devices
+
 ---
 
-## 6. Gameplay Speed Scaling
+## Phase 6: Gameplay Speed Scaling
 
 **Files: `GameScene.swift`, `Constants.swift`**
 
@@ -134,9 +192,17 @@ widthRatio  = sceneWidth / 390.0
 - Destroy-below-Y threshold: `-30` (unchanged, still just off-screen)
 - UFO Y position: `sceneHeight * 0.858` instead of `sceneHeight - 120`
 
+### After this phase, test:
+- iPad: fire a bullet — it should take roughly the same time to cross the screen as on iPhone
+- iPad: watch alien march speed — should feel the same pace as iPhone, just covering more ground
+- iPad: wait for enemy bullets — travel time should feel consistent with iPhone
+- iPhone 16: all speeds should be identical to current build (ratios = 1.0)
+- Watch for a UFO — should appear near the top of the screen and cross at a reasonable pace on both devices
+- Pick up a powerup — it should fall at a consistent-feeling speed on both devices
+
 ---
 
-## 7. Difficulty Balancing
+## Phase 7: Difficulty Balancing
 
 **Files: `GameScene.swift`, `Constants.swift`**
 
@@ -161,9 +227,16 @@ More columns on iPad means more aliens firing simultaneously, and landscape comp
 - The compressed vertical space in landscape means less visual reaction time even with consistent travel speeds
 - Consider a small additional fire rate reduction (~0.9x multiplier) in landscape to compensate for the tighter vertical window
 
+### After this phase, test:
+- iPad portrait: play a full wave — bullet density should feel similar to iPhone, not overwhelming
+- iPad: count swooping aliens over a wave — should be roughly the same number as on iPhone
+- iPad: observe powerup drops — should feel slightly more frequent than iPhone (more aliens to kill) but not raining powerups
+- iPhone 16: difficulty should be identical to current build (all scaling factors = 1.0)
+- Side-by-side comparison if possible: play the same level on iPhone and iPad — the pressure/challenge should feel comparable
+
 ---
 
-## 8. Particle Effects
+## Phase 8: Particle Effects
 
 **File: `ParticleEffects.swift`**
 
@@ -171,9 +244,16 @@ More columns on iPad means more aliens firing simultaneously, and landscape comp
 - Spark particles: keep current scale (they're small effects, size is fine)
 - Thrust particles: unchanged (relative to ship, ship stays same size)
 
+### After this phase, test:
+- iPad: starfield should fill the entire screen with no gaps or visible edges
+- iPad: stars should not be bunched in a 390-wide strip in the center
+- iPhone 16: starfield should look identical to current build
+- Destroy an alien on iPad: spark effects should appear at the correct position and look normal
+- Check ship thrust particles on iPad: should still trail from the bottom of the ship correctly
+
 ---
 
-## 9. SwiftUI Menus & Screens
+## Phase 9: SwiftUI Menus & Screens
 
 All menus use the **centered column, max-width** approach: same vertical stack layout as iPhone, capped at ~500pt wide and horizontally centered on larger screens.
 
@@ -205,9 +285,19 @@ All menus use the **centered column, max-width** approach: same vertical stack l
 - Read screen bounds and pass as scene size
 - Use `GeometryReader` to capture safe area insets
 
+### After this phase, test:
+- iPad: main menu should be centered, not stretched edge-to-edge — title and buttons capped at ~500pt wide
+- iPad: title text should be larger than on iPhone
+- iPad: buttons should be comfortably sized, easy to tap
+- iPad: settings screen — controls centered, readable, not tiny
+- iPad: instructions screen — text readable, powerup icons appropriately sized
+- iPad: exit button during gameplay — large enough to tap easily
+- iPhone 16: all menus should look identical to current build
+- Navigate through all screens on iPad to check nothing is cut off or overlapping
+
 ---
 
-## 10. Safe Area Handling
+## Phase 10: Safe Area Handling
 
 **Files: `GameContainerView.swift`, `GameScene.swift`**
 
@@ -219,9 +309,16 @@ All menus use the **centered column, max-width** approach: same vertical stack l
   - Camera housing (top on newer iPads)
   - Landscape mode where safe areas shift to sides
 
+### After this phase, test:
+- iPad with home indicator: HUD elements should not overlap the home indicator bar
+- iPad: score and lives should have proper margins from screen edges, respecting safe areas
+- iPhone 16 (with notch/dynamic island): HUD should not be hidden behind the status bar area
+- iPhone SE: verify safe area insets are minimal and HUD positions are correct
+- If landscape is partially working at this point: check that safe areas shift to the sides correctly
+
 ---
 
-## 11. Landscape Support
+## Phase 11: Landscape Support
 
 **Included in this pass.** iPad supports both portrait and landscape; iPhone stays portrait-only.
 
@@ -239,12 +336,22 @@ All menus use the **centered column, max-width** approach: same vertical stack l
   - Bullet speeds scale with `heightRatio` so travel time stays consistent
   - Player has more horizontal room to dodge
 - HUD: score centered at top, lives in top-left — positions use safe area offsets
-- Starfield emitter: adapts to scene size automatically (from section 8)
-  - Additional ~0.9x fire rate multiplier to compensate for compressed vertical space (from section 7)
+- Starfield emitter: adapts to scene size automatically (from Phase 8)
+  - Additional ~0.9x fire rate multiplier to compensate for compressed vertical space (from Phase 7)
 
 ### Landscape Menus
 - Centered column layout works in both orientations due to max-width constraint
 - May need reduced vertical spacing in landscape since height is shorter
+
+### After this phase, test:
+- iPad: rotate to landscape on the main menu — layout should adapt, content centered
+- iPad: start a game in landscape — aliens should form a very wide grid with more columns
+- iPad landscape: player movement, bullet speeds, and general feel should be comparable to portrait
+- iPad landscape: HUD should respect landscape safe areas (notch/camera on side)
+- iPad: rotate device during a game — orientation should stay locked
+- iPad: return to menu after a game — orientation should unlock and respond to rotation
+- iPhone: should remain portrait-only at all times, rotation has no effect
+- Play a full game in landscape on iPad to verify end-to-end: menu → gameplay → game over → menu
 
 ---
 
