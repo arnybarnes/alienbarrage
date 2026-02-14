@@ -46,6 +46,7 @@ frame_*.png
 
 # Debug sprite exports
 .debug-sprites/
+.deriveddata-ios/
 
 # OS files
 .DS_Store
