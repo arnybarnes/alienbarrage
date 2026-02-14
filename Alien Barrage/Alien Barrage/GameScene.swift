@@ -84,6 +84,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let starfield = ParticleEffects.createStarfield(sceneSize: size)
         addChild(starfield)
 
+        scoreManager.scoreMultiplier = settings?.scoreMultiplier ?? 1.0
         setupPlayer()
         setupAliens()
         setupScoreDisplay()
@@ -319,7 +320,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func destroySwoopingAlien(_ alien: AlienEntity, hitPlayer: Bool) {
-        guard alien.isAlive else { return }
+        guard alien.isAlive else {
+            // Already dead — still clean up tracking in case of stale entries
+            swoopingAliens.removeAll { $0 === alien }
+            return
+        }
 
         alien.isAlive = false
         alien.isSwooping = false
@@ -341,7 +346,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
         if gameState == .gameOver {
-            handleGameOverTap()
+            guard let touch = touches.first else { return }
+            let location = touch.location(in: self)
+            let tappedNodes = nodes(at: location)
+            if tappedNodes.contains(where: { $0.name == "continueButton" }) {
+                handleGameOverTap()
+            }
             return
         }
         guard gameState == .playing || gameState == .levelTransition else { return }
@@ -459,7 +469,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if alienEntity.isSwooping {
                 // Swooper: clean up directly (already removed from grid)
                 let scoreValue = alienEntity.scoreValueComponent.value
-                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
+                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
                 if Double.random(in: 0...1) < GameConstants.powerupDropChance {
@@ -476,7 +486,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
                 let scoreValue = alienEntity.scoreValueComponent.value
-                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreValue)
+                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
                 // Chance to drop powerup
@@ -538,7 +548,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             let worldPos = ufoNode.position
             let scoreValue = ufo.scoreValueComponent.value
-            ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreValue)
+            ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
             scoreManager.addPoints(scoreValue)
             ufoNode.removeFromParent()
             ufoEntity = nil
@@ -554,7 +564,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func handlePlayerCollectsPowerup(powerupBody: SKPhysicsBody) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let powerupNode = powerupBody.node as? SKSpriteNode,
               let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
 
@@ -567,6 +577,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if powerup.type == .extraLife {
             livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
         }
+
+        // Score
+        let scoreValue = GameConstants.powerupCollectScore
+        scoreManager.addPoints(scoreValue)
+        ExplosionEffect.spawnScorePopup(at: powerupNode.position, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
 
         // Collection effect
         let pulse = SKAction.group([
@@ -624,31 +639,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Screen shake
         ScreenShakeEffect.shake(node: worldNode, duration: 0.6, intensity: 12)
 
-        // Remove swooping aliens
-        for swooper in swoopingAliens {
-            swooper.spriteComponent.node.removeAllActions()
-            swooper.spriteComponent.node.removeFromParent()
-        }
-        swoopingAliens.removeAll()
-
-        // Hide formation and remove lingering bullets/UFO/powerups
-        alienFormation?.formationNode.isHidden = true
-        removeUFO()
-        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
-            node.removeFromParent()
-        }
-        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
-        }
-        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
-            node.removeFromParent()
-        }
-
+        // After explosion settles, freeze everything and show game over
         let wait = SKAction.wait(forDuration: 1.0)
-        let showOverlay = SKAction.run { [weak self] in
-            self?.showGameOverOverlay()
+        let freezeAndShow = SKAction.run { [weak self] in
+            guard let self else { return }
+            self.worldNode.isPaused = true
+            self.showGameOverOverlay()
         }
-        run(SKAction.sequence([wait, showOverlay]))
+        run(SKAction.sequence([wait, freezeAndShow]))
     }
 
     private func showGameOverOverlay() {
@@ -683,16 +681,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             overlay.addChild(highLabel)
         }
 
-        let tapLabel = makeOverlayLabel(text: "TAP TO CONTINUE", fontSize: 20)
-        tapLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110)
-        tapLabel.alpha = 0.6
-        tapLabel.run(SKAction.repeatForever(
-            SKAction.sequence([
-                SKAction.fadeAlpha(to: 1.0, duration: 0.8),
-                SKAction.fadeAlpha(to: 0.4, duration: 0.8)
-            ])
-        ))
-        overlay.addChild(tapLabel)
+        let buttonSize = CGSize(width: 200, height: 50)
+        let button = SKSpriteNode(color: SKColor(red: 0.15, green: 0.5, blue: 0.15, alpha: 1.0), size: buttonSize)
+        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110)
+        button.name = "continueButton"
+
+        let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        buttonLabel.text = "CONTINUE"
+        buttonLabel.fontSize = 22
+        buttonLabel.fontColor = .white
+        buttonLabel.verticalAlignmentMode = .center
+        buttonLabel.horizontalAlignmentMode = .center
+        buttonLabel.name = "continueButton"
+        button.addChild(buttonLabel)
+
+        overlay.addChild(button)
 
         addChild(overlay)
         overlayNode = overlay
@@ -705,6 +708,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         overlayNode?.removeFromParent()
         overlayNode = nil
 
+        // Unpause world
+        worldNode.isPaused = false
+
         // Remove all entity sprites and clear
         for entity in entities {
             if let spriteComp = entity.component(ofType: SpriteComponent.self) {
@@ -713,15 +719,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
         entities.removeAll()
 
-        // Remove formation (unhide first in case it was hidden during game over)
-        alienFormation?.formationNode.isHidden = false
+        // Remove formation
         alienFormation?.formationNode.removeFromParent()
         alienFormation = nil
 
         // Remove UFO if active
         removeUFO()
 
-        // Remove any lingering powerup nodes
+        // Remove any lingering bullets/powerup nodes
+        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
         worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
             node.removeFromParent()
         }
@@ -766,7 +777,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func checkLevelComplete() {
         guard gameState == .playing,
               let formation = alienFormation,
-              formation.allDestroyed else { return }
+              formation.aliveCount == 0,
+              swoopingAliens.isEmpty,
+              ufoEntity == nil else { return }
 
         gameState = .levelTransition
         currentLevel += 1

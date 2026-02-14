@@ -39,7 +39,7 @@ enum GameConstants {
 
     // MARK: - Player
     static let playerSpeed: CGFloat = 300.0
-    static let playerFireRate: TimeInterval = 0.25
+    static let playerFireRate: TimeInterval = 0.7
     static let playerBulletSpeed: CGFloat = 600.0
     static let playerLives: Int = 3
     static let playerInvulnerabilityDuration: TimeInterval = 2.0
@@ -67,6 +67,7 @@ enum GameConstants {
     // MARK: - Scoring
     static let alienSmallScore: Int = 100
     static let alienLargeScore: Int = 200
+    static let powerupCollectScore: Int = 50
 
     // MARK: - Powerups
     static let powerupDropChance: Double = 0.15

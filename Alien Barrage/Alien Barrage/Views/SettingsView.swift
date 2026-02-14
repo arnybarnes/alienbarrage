@@ -60,6 +60,17 @@ struct SettingsView: View {
                                 .foregroundColor(.gray)
                         }
                     }
+
+                    // Score multiplier
+                    HStack {
+                        Text("SCORE MULTIPLIER")
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.green.opacity(0.7))
+                        Spacer()
+                        Text(String(format: "%.2fx", gameSettings.scoreMultiplier))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(.green)
+                    }
                 }
                 .padding()
                 .background(

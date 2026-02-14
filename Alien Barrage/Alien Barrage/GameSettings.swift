@@ -18,7 +18,7 @@ class GameSettings: ObservableObject {
         let diffRaw = UserDefaults.standard.string(forKey: "difficulty") ?? "normal"
         self.difficulty = Difficulty(rawValue: diffRaw) ?? .normal
         let speed = UserDefaults.standard.double(forKey: "autofireSpeed")
-        self.autofireSpeed = (speed >= 0.2 && speed <= 1.0) ? speed : 0.25
+        self.autofireSpeed = (speed >= 0.2 && speed <= 1.0) ? speed : 0.7
     }
 
     var effectiveLives: Int {
@@ -47,5 +47,17 @@ class GameSettings: ObservableObject {
 
     var effectiveFireRate: TimeInterval {
         autofireSpeed
+    }
+
+    var scoreMultiplier: Double {
+        let difficultyMult: Double
+        switch difficulty {
+        case .easy: difficultyMult = 0.75
+        case .normal: difficultyMult = 1.0
+        case .hard: difficultyMult = 1.5
+        }
+        // Fire speed: 0.2 (fast) → 0.75x, 1.0 (slow) → 1.25x
+        let fireSpeedMult = 0.75 + (autofireSpeed - 0.2) / 0.8 * 0.5
+        return difficultyMult * fireSpeedMult
     }
 }
