@@ -64,6 +64,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var currentSwoopInterval: TimeInterval = GameConstants.swoopBaseInterval
     private var maxSimultaneousSwoops: Int = 1
 
+    // Respawn state — pauses enemy attacks during glitch-in animation
+    private var isRespawning: Bool = false
+
     // Overlay
     private var overlayNode: SKNode?
 
@@ -185,6 +188,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Bullet Spawning
 
     private func spawnPlayerBullet() {
+        guard !isRespawning else { return }
         AudioManager.shared.play(GameConstants.Sound.playerShoot)
         if GameConstants.Haptic.playerShoot { HapticManager.shared.lightImpact() }
 
@@ -542,7 +546,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isDead {
             handlePlayerDeath()
         } else {
-            playerEntity.makeInvulnerable(duration: GameConstants.playerInvulnerabilityDuration)
+            respawnPlayer()
         }
     }
 
@@ -634,7 +638,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if isDead {
             handlePlayerDeath()
         } else {
-            playerEntity.makeInvulnerable(duration: GameConstants.playerInvulnerabilityDuration)
+            respawnPlayer()
         }
     }
 
@@ -716,6 +720,86 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         addChild(overlay)
         overlayNode = overlay
+    }
+
+    // MARK: - Respawn (hit but not dead)
+
+    private func respawnPlayer() {
+        isRespawning = true
+        playerEntity.shootingComponent.isFiring = false
+        playerEntity.spriteComponent.node.alpha = 0
+
+        // Clear all bullets, powerups, and swooping aliens
+        worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+        worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
+            node.removeFromParent()
+        }
+
+        // Remove swooping aliens
+        for swooper in swoopingAliens {
+            swooper.isAlive = false
+            swooper.isSwooping = false
+            swooper.spriteComponent.node.removeAllActions()
+            swooper.spriteComponent.node.removeFromParent()
+            alienFormation?.swooperDestroyed()
+        }
+        swoopingAliens.removeAll()
+
+        // Remove UFO if active
+        removeUFO()
+
+        // Freeze the game world
+        worldNode.isPaused = true
+
+        // Show "SHIP DESTROYED" message with remaining lives
+        let lives = playerEntity.healthComponent.currentHP
+        let hs = GameConstants.hudScale
+
+        let msgNode = SKNode()
+        msgNode.zPosition = GameConstants.ZPosition.overlay
+
+        let destroyedLabel = makeOverlayLabel(text: "SHIP DESTROYED", fontSize: 36)
+        destroyedLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 20 * hs)
+        msgNode.addChild(destroyedLabel)
+
+        let livesText = lives == 1 ? "1 SHIP REMAINING" : "\(lives) SHIPS REMAINING"
+        let livesLabel = makeOverlayLabel(text: livesText, fontSize: 22)
+        livesLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
+        msgNode.addChild(livesLabel)
+
+        // Fade in
+        msgNode.alpha = 0
+        addChild(msgNode)
+        msgNode.run(SKAction.fadeIn(withDuration: 0.2))
+
+        // After a pause, remove message, unfreeze, and glitch-in
+        let showDuration: TimeInterval = 1.5
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: showDuration),
+            SKAction.run { [weak self] in
+                guard let self else { return }
+                msgNode.run(SKAction.sequence([
+                    SKAction.fadeOut(withDuration: 0.2),
+                    SKAction.removeFromParent()
+                ]))
+
+                // Unfreeze world
+                self.worldNode.isPaused = false
+
+                let respawnPos = CGPoint(x: self.size.width / 2, y: self.size.height * 0.142)
+                self.playerEntity.respawnWithGlitch(
+                    at: respawnPos,
+                    invulnerabilityDuration: GameConstants.playerInvulnerabilityDuration
+                ) { [weak self] in
+                    self?.isRespawning = false
+                }
+            }
+        ]))
     }
 
     // MARK: - Restart
@@ -1033,11 +1117,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 playerEntity.movementComponent.maxY = max(playerEntity.movementComponent.minY, ceiling)
             }
 
-            // Enemy fire timer
-            enemyFireTimer += dt
-            if enemyFireTimer >= currentEnemyFireInterval {
-                enemyFireTimer = 0
-                spawnEnemyBullet()
+            // Enemy fire timer (paused during respawn)
+            if !isRespawning {
+                enemyFireTimer += dt
+                if enemyFireTimer >= currentEnemyFireInterval {
+                    enemyFireTimer = 0
+                    spawnEnemyBullet()
+                }
             }
 
             // UFO spawn timer
@@ -1048,17 +1134,20 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 spawnUFO()
             }
 
-            // Swoop timer
-            swoopTimer += dt
+            // Swoop timer (paused during respawn)
+            if !isRespawning {
+                swoopTimer += dt
+            }
             if swoopTimer >= currentSwoopInterval {
                 swoopTimer = 0
                 initiateSwoop()
             }
 
-            // Pause firing when nothing to shoot at, resume if UFO appears
-            let hasTargets = (alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil
-            if hasTargets != playerEntity.shootingComponent.isFiring {
-                playerEntity.shootingComponent.isFiring = hasTargets
+            // Pause firing when nothing to shoot at, during respawn, or resume if UFO appears
+            let shouldFire = !isRespawning &&
+                ((alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil)
+            if shouldFire != playerEntity.shootingComponent.isFiring {
+                playerEntity.shootingComponent.isFiring = shouldFire
             }
 
             // Check if aliens reached the bottom (instant game over)

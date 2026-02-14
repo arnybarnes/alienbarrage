@@ -120,6 +120,64 @@ class PlayerEntity: GKEntity {
         node.run(SKAction.sequence([wait, endInvulnerability]), withKey: "invulnerabilityTimer")
     }
 
+    // MARK: - Phase-In / Glitch Respawn
+
+    /// Glitch respawn effect: ship flickers in and out like a bad signal,
+    /// becoming more solid each cycle before fully appearing.
+    /// Calls `completion` when the phase-in finishes (before invulnerability ends).
+    func respawnWithGlitch(at respawnPos: CGPoint, invulnerabilityDuration: TimeInterval, completion: @escaping () -> Void) {
+        let node = spriteComponent.node
+        isInvulnerable = true
+
+        // Cancel any existing invulnerability animations
+        node.removeAction(forKey: "invulnerabilityBlink")
+        node.removeAction(forKey: "invulnerabilityTimer")
+
+        // Move to respawn position, start invisible
+        node.position = respawnPos
+        node.alpha = 0
+
+        // Build glitch flicker sequence — each cycle gets more solid
+        var actions: [SKAction] = []
+        let flickerCycles: [(alpha: CGFloat, onDur: TimeInterval, offDur: TimeInterval)] = [
+            (0.25, 0.06, 0.12),
+            (0.4,  0.08, 0.10),
+            (0.6,  0.10, 0.08),
+            (0.8,  0.12, 0.06),
+            (1.0,  0.14, 0.0),
+        ]
+
+        for cycle in flickerCycles {
+            // Flash on with slight horizontal jitter
+            let jitterX = CGFloat.random(in: -4...4)
+            actions.append(SKAction.group([
+                SKAction.fadeAlpha(to: cycle.alpha, duration: 0.02),
+                SKAction.moveBy(x: jitterX, y: 0, duration: 0.02),
+                SKAction.colorize(with: .white, colorBlendFactor: 0.5, duration: 0.02),
+            ]))
+            actions.append(SKAction.wait(forDuration: cycle.onDur))
+            // Snap back position and color
+            actions.append(SKAction.group([
+                SKAction.moveTo(x: respawnPos.x, duration: 0.02),
+                SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.02),
+            ]))
+            if cycle.offDur > 0 {
+                actions.append(SKAction.fadeAlpha(to: 0, duration: 0.02))
+                actions.append(SKAction.wait(forDuration: cycle.offDur))
+            }
+        }
+
+        // Final solid appearance
+        actions.append(SKAction.fadeAlpha(to: 1.0, duration: 0.05))
+        actions.append(SKAction.run { [weak self] in
+            guard let self else { return }
+            self.makeInvulnerable(duration: invulnerabilityDuration)
+            completion()
+        })
+
+        node.run(SKAction.sequence(actions), withKey: "glitchRespawn")
+    }
+
     // MARK: - Powerups
 
     func applyPowerup(_ type: PowerupType) {
