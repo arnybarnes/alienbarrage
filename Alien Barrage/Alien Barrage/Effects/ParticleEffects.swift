@@ -30,8 +30,12 @@ enum ParticleEffects {
         let emitter = SKEmitterNode()
         emitter.particleTexture = dotTexture(diameter: 4)
 
-        emitter.particleBirthRate = 40
-        emitter.particleLifetime = 6
+        // Scale birth rate and speed with screen area so star density looks consistent
+        let areaRatio = (sceneSize.width * sceneSize.height) / (390.0 * 844.0)
+        let heightRatio = sceneSize.height / 844.0
+
+        emitter.particleBirthRate = 40 * CGFloat(areaRatio)
+        emitter.particleLifetime = 6 * CGFloat(heightRatio)
         emitter.particleLifetimeRange = 2
 
         emitter.particlePosition = CGPoint(x: sceneSize.width / 2, y: sceneSize.height)
@@ -39,8 +43,8 @@ enum ParticleEffects {
 
         emitter.emissionAngle = -.pi / 2  // Downward
         emitter.emissionAngleRange = 0
-        emitter.particleSpeed = 50
-        emitter.particleSpeedRange = 20
+        emitter.particleSpeed = 50 * CGFloat(heightRatio)
+        emitter.particleSpeedRange = 20 * CGFloat(heightRatio)
 
         emitter.particleScale = 0.2
         emitter.particleScaleRange = 0.15
@@ -54,7 +58,7 @@ enum ParticleEffects {
         emitter.particleColorBlueRange = 0.3  // Slight blue tint variation
 
         emitter.zPosition = GameConstants.ZPosition.stars
-        emitter.advanceSimulationTime(8)  // Pre-fill the screen
+        emitter.advanceSimulationTime(Double(emitter.particleLifetime) + 2)  // Pre-fill the screen
 
         return emitter
     }
