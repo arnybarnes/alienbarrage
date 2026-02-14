@@ -35,7 +35,7 @@ class ProjectileEntity: GKEntity {
         // Physics body for collision detection
         let body = SKPhysicsBody(rectangleOf: ProjectileEntity.bulletSize)
         body.categoryBitMask = GameConstants.PhysicsCategory.playerBullet
-        body.contactTestBitMask = GameConstants.PhysicsCategory.enemy | GameConstants.PhysicsCategory.ufo | GameConstants.PhysicsCategory.shield
+        body.contactTestBitMask = GameConstants.PhysicsCategory.enemy | GameConstants.PhysicsCategory.ufo
         body.collisionBitMask = 0
         body.isDynamic = true
         body.affectedByGravity = false

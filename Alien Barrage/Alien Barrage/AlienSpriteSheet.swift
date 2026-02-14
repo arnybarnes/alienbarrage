@@ -18,10 +18,10 @@ final class AlienSpriteSheet {
     /// Coordinates use top-left origin.
     private let spriteRects: [String: CGRect] = [
         // Large tier
-        "alienLarge1": CGRect(x: 19,  y: 39,  width: 251, height: 206),
-        "alienLarge2": CGRect(x: 725, y: 55,  width: 285, height: 193),
-        "alienLarge3": CGRect(x: 281, y: 60,  width: 191, height: 171),
-        "alienLarge4": CGRect(x: 482, y: 69,  width: 232, height: 168),
+        "alienLarge1": CGRect(x: 19,  y: 39, width: 251, height: 206),
+        "alienLarge2": CGRect(x: 281, y: 60, width: 191, height: 171),
+        "alienLarge3": CGRect(x: 478, y: 64, width: 222, height: 168),
+        "alienLarge4": CGRect(x: 708, y: 63, width: 216, height: 166),
 
         // Medium tier
         "alienMedium1": CGRect(x: 292, y: 270, width: 165, height: 156),
