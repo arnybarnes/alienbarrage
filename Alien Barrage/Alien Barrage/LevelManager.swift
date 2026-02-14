@@ -22,7 +22,7 @@ enum LevelManager {
         case 1:
             return LevelConfig(
                 level: 1,
-                rows: 4, cols: 5,
+                rows: 4, cols: 4,
                 baseSpeed: 40,
                 fireInterval: 2.0,
                 alienHPBonus: 0,
@@ -31,15 +31,15 @@ enum LevelManager {
         case 2:
             return LevelConfig(
                 level: 2,
-                rows: 4, cols: 6,
+                rows: 4, cols: 5,
                 baseSpeed: 48,
                 fireInterval: 1.8,
                 alienHPBonus: 0,
                 maxSimultaneousSwoops: 1
             )
         default:
-            let rows = min(6, 4 + level / 3)
-            let cols = min(8, 5 + level / 2)
+            let rows = min(5, 4 + level / 4)
+            let cols = min(7, 4 + level / 2)
             let baseSpeed = CGFloat(40 + level * 8)
             let fireInterval = max(0.6, 2.0 - Double(level) * 0.15)
             let alienHPBonus = level / 4

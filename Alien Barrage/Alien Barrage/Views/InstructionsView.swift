@@ -34,9 +34,9 @@ struct InstructionsView: View {
                         section("OBJECTIVE",
                             "Destroy all aliens to advance to the next level. Don't let them reach the bottom!")
                         section("ENEMIES",
-                            "Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
+                            "Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! All aliens die in one hit. A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
                         section("SCORING",
-                            "Small aliens = 100 pts. Large aliens = 200 pts (take 2 hits). Collecting a powerup = 50 pts.")
+                            "Small aliens = 100 pts. Large aliens = 200 pts. Collecting a powerup = 50 pts.")
                         section("LIVES",
                             "Start with 3 lives (varies by difficulty). Getting hit costs a life. Brief invulnerability after respawn.")
 
