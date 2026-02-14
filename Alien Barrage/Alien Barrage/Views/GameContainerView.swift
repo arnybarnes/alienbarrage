@@ -27,9 +27,9 @@ struct GameContainerView: View {
                     onGameOver(score)
                 } label: {
                     Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
+                        .font(.system(size: 14 * GameConstants.hudScale, weight: .bold))
                         .foregroundColor(.white.opacity(0.5))
-                        .frame(width: 30, height: 30)
+                        .frame(width: 30 * GameConstants.hudScale, height: 30 * GameConstants.hudScale)
                         .background(Circle().fill(Color.black.opacity(0.4)))
                 }
                 .padding(.bottom, 10)
@@ -39,6 +39,8 @@ struct GameContainerView: View {
                 let newScene = GameScene(size: sceneSize, settings: gameSettings)
                 newScene.scaleMode = .resizeFill
                 newScene.anchorPoint = CGPoint(x: 0, y: 0)
+                let si = geo.safeAreaInsets
+                newScene.safeAreaInsets = UIEdgeInsets(top: si.top, left: si.leading, bottom: si.bottom, right: si.trailing)
                 newScene.onGameOver = { score in
                     onGameOver(score)
                 }

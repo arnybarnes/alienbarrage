@@ -50,6 +50,7 @@ enum GameConstants {
     static let playerFireRate: TimeInterval = 0.7
     static let playerBulletSpeed: CGFloat = 600.0
     static let playerLives: Int = 3
+    static let playerMaxLivesForExtraLife: Int = 4
     static let playerInvulnerabilityDuration: TimeInterval = 2.0
 
     // MARK: - Aliens

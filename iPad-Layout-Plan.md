@@ -19,8 +19,8 @@
 | Phase 6: Gameplay Speed Scaling | **Complete** | heightRatio/widthRatio in Constants; applied to player bullets, enemy bullets, powerup fall, UFO, alien march, swoop path/speed; UFO Y proportional (0.858) |
 | Phase 7: Difficulty Balancing | **Complete** | Fire interval and swoop interval scale up by column ratio; powerup drop rate slightly boosted on wider screens (dampened 0.75x) |
 | Phase 8: Particle Effects | **Complete** | Starfield birth rate scales with screen area, speed/lifetime scale with height ratio, pre-fill time dynamic; sparks and thrust unchanged (relative to sprites) |
-| Phase 9: SwiftUI Menus & Screens | Not started | |
-| Phase 10: Safe Area Handling | Not started | |
+| Phase 9: SwiftUI Menus & Screens | **Complete** | MenuView, SettingsView, InstructionsView capped at 500pt maxWidth; exit button scales with hudScale |
+| Phase 10: Safe Area Handling | **Complete** | safeAreaInsets passed from GeometryReader to GameScene; ScoreDisplay and LivesDisplay offset by bottom inset |
 | Phase 11: Landscape Support | Not started | |
 
 ---

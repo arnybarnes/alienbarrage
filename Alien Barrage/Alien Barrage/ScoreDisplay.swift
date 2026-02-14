@@ -10,7 +10,7 @@ class ScoreDisplay {
     let node: SKNode
     private let labelNode: SKLabelNode
 
-    init() {
+    init(bottomInset: CGFloat = 0) {
         node = SKNode()
         node.zPosition = GameConstants.ZPosition.ui
 
@@ -23,8 +23,8 @@ class ScoreDisplay {
         node.addChild(label)
         labelNode = label
 
-        // Position at bottom-center of scene (below player ship)
-        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 30 * GameConstants.hudScale)
+        // Position at bottom-center of scene (below player ship), offset by safe area
+        node.position = CGPoint(x: GameConstants.sceneWidth / 2.0, y: 30 * GameConstants.hudScale + bottomInset)
 
         // Show initial "0"
         update(score: 0)

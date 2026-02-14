@@ -73,6 +73,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Overlay
     private var overlayNode: SKNode?
 
+    var safeAreaInsets: UIEdgeInsets = .zero
+
     convenience init(size: CGSize, settings: GameSettings) {
         self.init(size: size)
         self.settings = settings
@@ -178,7 +180,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupScoreDisplay() {
-        scoreDisplay = ScoreDisplay()
+        scoreDisplay = ScoreDisplay(bottomInset: safeAreaInsets.bottom)
         addChild(scoreDisplay.node)  // UI stays on scene, not worldNode
 
         scoreManager.onScoreChanged = { [weak self] score in
@@ -187,7 +189,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func setupLivesDisplay() {
-        livesDisplay = LivesDisplay()
+        livesDisplay = LivesDisplay(bottomInset: safeAreaInsets.bottom)
         addChild(livesDisplay.node)  // UI stays on scene, not worldNode
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
@@ -262,8 +264,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnPowerup(at position: CGPoint) {
         var type = PowerupType.random()
-        if type == .extraLife && playerEntity.healthComponent.currentHP >= 3 {
-            // Re-roll once to avoid extra life when player already has 3+ ships
+        if type == .extraLife && playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
+            // Re-roll once to avoid extra life when player is at max ships
             type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
         }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
@@ -718,15 +720,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60 * hs)
             overlay.addChild(highLabel)
         }
-        let buttonSize = CGSize(width: 200 * hs, height: 50 * hs)
-        let button = SKSpriteNode(color: SKColor(red: 0.15, green: 0.5, blue: 0.15, alpha: 1.0), size: buttonSize)
+        let btnW = 250 * hs
+        let btnH = 50 * hs
+        let btnRect = CGRect(x: -btnW / 2, y: -btnH / 2, width: btnW, height: btnH)
+        let btnPath = UIBezierPath(roundedRect: btnRect, cornerRadius: 8 * hs)
+        let button = SKShapeNode(path: btnPath.cgPath)
+        button.strokeColor = SKColor.green.withAlphaComponent(0.5)
+        button.lineWidth = 1
+        button.fillColor = SKColor.green.withAlphaComponent(0.08)
         button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110 * hs)
         button.name = "continueButton"
 
-        let buttonLabel = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let buttonLabel = SKLabelNode(fontNamed: "Menlo-Bold")
         buttonLabel.text = "MENU"
-        buttonLabel.fontSize = 22 * hs
-        buttonLabel.fontColor = .white
+        buttonLabel.fontSize = 20 * hs
+        buttonLabel.fontColor = .green
         buttonLabel.verticalAlignmentMode = .center
         buttonLabel.horizontalAlignmentMode = .center
         buttonLabel.name = "continueButton"
@@ -1083,7 +1091,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
         let scaledSize = fontSize * GameConstants.hudScale
-        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.text = text
         label.fontSize = scaledSize
         label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
@@ -1091,7 +1099,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
 
         // Shadow/outline effect via a duplicate label behind
-        let shadow = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let shadow = SKLabelNode(fontNamed: "Menlo-Bold")
         shadow.text = text
         shadow.fontSize = scaledSize
         shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
@@ -1106,13 +1114,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func flashExtraLifeMessage() {
         let playerPos = playerEntity.spriteComponent.node.position
-        let label = SKLabelNode(fontNamed: "AvenirNext-HeavyItalic")
+        let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.text = "EXTRA SHIP!"
         label.fontSize = 18 * GameConstants.hudScale
         label.fontColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .top
-        label.position = CGPoint(x: playerPos.x, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
+        let margin: CGFloat = 60 * GameConstants.hudScale
+        let clampedX = min(max(playerPos.x, margin), size.width - margin)
+        label.position = CGPoint(x: clampedX, y: playerPos.y - PlayerEntity.shipSize.height / 2 - 8)
         label.zPosition = GameConstants.ZPosition.ui
         worldNode.addChild(label)
 

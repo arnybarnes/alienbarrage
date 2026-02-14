@@ -82,6 +82,7 @@ struct SettingsView: View {
 
                 Spacer()
             }
+            .frame(maxWidth: 500)
             .padding(.top, 20)
         }
     }
