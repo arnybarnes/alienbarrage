@@ -30,12 +30,14 @@ class PlayerEntity: GKEntity {
 
         baseFireRate = fireRate
 
+        let baseY = sceneSize.height * 0.142
+
         spriteComponent = SpriteComponent(texture: texture, size: PlayerEntity.shipSize)
         movementComponent = MovementComponent(
             speed: GameConstants.playerSpeed,
             sceneWidth: sceneSize.width,
             spriteHalfWidth: PlayerEntity.shipSize.width / 2,
-            baseY: 120,
+            baseY: baseY,
             spriteHeight: PlayerEntity.shipSize.height
         )
         shootingComponent = ShootingComponent(fireRate: fireRate)
@@ -49,7 +51,7 @@ class PlayerEntity: GKEntity {
         addComponent(healthComponent)
 
         let node = spriteComponent.node
-        node.position = CGPoint(x: sceneSize.width / 2, y: 120)
+        node.position = CGPoint(x: sceneSize.width / 2, y: baseY)
         node.zPosition = GameConstants.ZPosition.player
 
         // Store entity reference for collision lookup
@@ -65,11 +67,19 @@ class PlayerEntity: GKEntity {
         body.affectedByGravity = false
         node.physicsBody = body
 
-        // Engine thrust particles
+        // Engine thrust particles with random on/off flicker
         let thrust = ParticleEffects.createEngineThrust()
         thrust.position = CGPoint(x: 0, y: -PlayerEntity.shipSize.height / 2 - 5)
         thrust.zPosition = -1
         node.addChild(thrust)
+
+        let thrustFlicker = SKAction.repeatForever(SKAction.sequence([
+            SKAction.run { thrust.particleBirthRate = 50 },
+            SKAction.wait(forDuration: 2.0, withRange: 3.0),
+            SKAction.run { thrust.particleBirthRate = 0 },
+            SKAction.wait(forDuration: 0.3, withRange: 0.4),
+        ]))
+        thrust.run(thrustFlicker, withKey: "thrustFlicker")
     }
 
     @MainActor required init?(coder: NSCoder) {

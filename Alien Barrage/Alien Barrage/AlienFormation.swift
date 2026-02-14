@@ -193,6 +193,46 @@ class AlienFormation {
         swoopingCount = max(0, swoopingCount - 1)
     }
 
+    /// Animates aliens appearing one-by-one in random order with a grow-bounce effect.
+    /// Calls `completion` when all aliens have finished appearing.
+    func animateEntrance(completion: @escaping () -> Void) {
+        // Collect all alive alien nodes
+        var allAliens: [SKSpriteNode] = []
+        for row in aliens {
+            for alien in row {
+                guard let alien = alien, alien.isAlive else { continue }
+                allAliens.append(alien.spriteComponent.node)
+            }
+        }
+        allAliens.shuffle()
+
+        // Hide all initially
+        for node in allAliens {
+            node.setScale(0)
+        }
+
+        // Stagger reveal: each alien gets a small delay offset
+        let staggerInterval: TimeInterval = 0.04
+        for (i, node) in allAliens.enumerated() {
+            let delay = TimeInterval(i) * staggerInterval
+            let appear = SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.scale(to: 1.2, duration: 0.15),
+                SKAction.scale(to: 0.9, duration: 0.1),
+                SKAction.scale(to: 1.05, duration: 0.1),
+                SKAction.scale(to: 1.0, duration: 0.1),
+            ])
+            node.run(appear, withKey: "alienEntrance")
+        }
+
+        // Total duration: last alien's delay + bounce time
+        let totalDuration = TimeInterval(allAliens.count) * staggerInterval + 0.45
+        formationNode.run(SKAction.sequence([
+            SKAction.wait(forDuration: totalDuration),
+            SKAction.run { completion() }
+        ]), withKey: "entranceComplete")
+    }
+
     /// Returns the world Y position of the lowest alive alien
     func lowestAlienY() -> CGFloat? {
         guard let parent = formationNode.parent else { return nil }

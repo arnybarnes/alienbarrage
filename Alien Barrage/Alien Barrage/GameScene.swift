@@ -92,6 +92,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupLivesDisplay()
         nextUfoSpawnInterval = randomUFOInterval()
 
+        // Animate first level entrance
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
+
         // Pause on background
         NotificationCenter.default.addObserver(
             self, selector: #selector(appWillResignActive),
@@ -761,7 +768,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         enemyFireTimer = 0
         ufoSpawnTimer = 0
         nextUfoSpawnInterval = randomUFOInterval()
-        gameState = .playing
         scoreManager.reset()
 
         // Re-setup
@@ -769,6 +775,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
+
+        // Animate entrance
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
     }
 
     // MARK: - Level Progression
@@ -828,7 +841,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if !remaining {
                 self.removeAction(forKey: "waitForClear")
                 self.removeAction(forKey: "waitForClearTimeout")
-                self.removeUFO()
                 self.showLevelOverlay()
 
                 let wait = SKAction.wait(forDuration: 2.5)
@@ -842,15 +854,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let poll = SKAction.sequence([SKAction.wait(forDuration: 0.1), checkAction])
         run(SKAction.repeatForever(poll), withKey: "waitForClear")
 
-        // Safety timeout — don't wait forever
+        // Safety timeout — don't wait forever (10s accommodates UFO crossing wide screens)
         let timeout = SKAction.sequence([
-            SKAction.wait(forDuration: 3.0),
+            SKAction.wait(forDuration: 10.0),
             SKAction.run { [weak self] in
                 guard let self,
                       self.overlayNode == nil,
                       self.action(forKey: "levelStart") == nil else { return }
                 self.removeAction(forKey: "waitForClear")
-                self.removeUFO()
                 worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
                     node.removeFromParent()
                 }
@@ -935,11 +946,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
 
         // Reset player position
-        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 120)
+        playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: size.height * 0.142)
 
-        gameState = .playing
+        // Pause firing and animate aliens appearing
+        playerEntity.shootingComponent.isFiring = false
+        gameState = .levelTransition
 
-        playerEntity.shootingComponent.isFiring = true
+        alienFormation?.animateEntrance { [weak self] in
+            self?.gameState = .playing
+        }
     }
 
     // MARK: - UFO
@@ -1038,6 +1053,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if swoopTimer >= currentSwoopInterval {
                 swoopTimer = 0
                 initiateSwoop()
+            }
+
+            // Pause firing when nothing to shoot at, resume if UFO appears
+            let hasTargets = (alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil
+            if hasTargets != playerEntity.shootingComponent.isFiring {
+                playerEntity.shootingComponent.isFiring = hasTargets
             }
 
             // Check if aliens reached the bottom (instant game over)
