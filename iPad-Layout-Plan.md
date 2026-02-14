@@ -11,7 +11,7 @@
 
 | Phase | Status | Notes |
 |-------|--------|-------|
-| Phase 1: Dynamic Scene Size | Not started | |
+| Phase 1: Dynamic Scene Size | **Complete** | Constants.swift uses computed props from UIScreen.main.bounds; GameContainerView uses GeometryReader + .resizeFill |
 | Phase 2: Element Sizing Strategy | Not started | |
 | Phase 3: Alien Formation Layout | Not started | |
 | Phase 4: HUD Repositioning | Not started | |
