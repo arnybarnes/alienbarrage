@@ -50,5 +50,7 @@ struct GameContainerView: View {
             scene = nil
         }
         .statusBarHidden(true)
+        .defersSystemGestures(on: .bottom)
+        .persistentSystemOverlays(.hidden)
     }
 }
