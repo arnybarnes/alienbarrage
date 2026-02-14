@@ -67,7 +67,7 @@ class EnemyProjectileEntity: GKEntity {
         // Circular physics body
         let body = SKPhysicsBody(circleOfRadius: EnemyProjectileEntity.bulletSize.width / 2)
         body.categoryBitMask = GameConstants.PhysicsCategory.enemyBullet
-        body.contactTestBitMask = GameConstants.PhysicsCategory.player | GameConstants.PhysicsCategory.shield
+        body.contactTestBitMask = GameConstants.PhysicsCategory.player
         body.collisionBitMask = 0
         body.isDynamic = true
         body.affectedByGravity = false

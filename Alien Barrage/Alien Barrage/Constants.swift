@@ -20,15 +20,13 @@ enum GameConstants {
         static let enemy:           UInt32 = 0b100       // 4
         static let enemyBullet:     UInt32 = 0b1000      // 8
         static let powerup:         UInt32 = 0b10000     // 16
-        static let shield:          UInt32 = 0b100000    // 32
-        static let ufo:             UInt32 = 0b1000000   // 64
+        static let ufo:             UInt32 = 0b100000    // 32
     }
 
     // MARK: - Z-Positions (layering)
     struct ZPosition {
         static let background: CGFloat = -10
         static let stars: CGFloat = -5
-        static let shieldBarrier: CGFloat = 5
         static let enemy: CGFloat = 10
         static let player: CGFloat = 15
         static let projectile: CGFloat = 20
@@ -76,10 +74,6 @@ enum GameConstants {
     static let powerupDuration: TimeInterval = 8.0
     static let powerupSpinSpeed: Double = 1.5  // multiplier: <1 = slower, >1 = faster
 
-    // MARK: - Shield Barriers
-    static let shieldBarriersEnabled: Bool = false
-    static let shieldHP: Int = 5
-
     // MARK: - Haptic Feedback
     struct Haptic {
         static let playerShoot      = false
@@ -106,10 +100,14 @@ enum GameConstants {
         static let levelStart          = ""
         static let gameOver            = ""
         static let menuSelect          = ""
-        static let shieldHit           = ""
-        static let shieldDestroyed     = ""
         static let playerHit           = ""
         static let extraLife           = ""
         static let highScore           = ""
+    }
+
+    // MARK: - Visual FX
+    // Internal runtime toggles for quickly testing visual options.
+    struct VisualFX {
+        static let alienEyeGlowEnabled: Bool = false
     }
 }

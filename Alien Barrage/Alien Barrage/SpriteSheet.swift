@@ -51,17 +51,13 @@ class SpriteSheet {
         "playerMissile": CGRect(x: 1450, y: 730, width: 48, height: 82),
         "enemyBullet": CGRect(x: 1507, y: 657, width: 474, height: 111),
 
-        // ── BOTTOM-LEFT QUADRANT (0,1024)-(1024,2048): Player, UFO, shields, text ──
+        // ── BOTTOM-LEFT QUADRANT (0,1024)-(1024,2048): Player, UFO, text ──
 
         // Player Ship - sleek grey/blue fighter
         "playerShip": CGRect(x: 631, y: 769, width: 315, height: 243),
 
         // UFO / Mothership saucer
         "ufo": CGRect(x: 93, y: 807, width: 446, height: 181),
-
-        // Shield / Barrier blocks
-        "shield1": CGRect(x: 88, y: 1686, width: 170, height: 150),
-        "shield2": CGRect(x: 310, y: 1686, width: 170, height: 150),
 
         // UI Text (pixel-measured from spritesheet)
         "levelStart": CGRect(x: 97, y: 1859, width: 339, height: 34),
@@ -120,6 +116,12 @@ class SpriteSheet {
     func sprite(named name: String) -> SKTexture? {
         if let cached = textureCache[name] {
             return cached
+        }
+
+        // Aliens are now sourced from a dedicated spritesheet.
+        if let alienTexture = AlienSpriteSheet.shared.sprite(named: name) {
+            textureCache[name] = alienTexture
+            return alienTexture
         }
 
         // Powerups are now sourced from a dedicated spin spritesheet.

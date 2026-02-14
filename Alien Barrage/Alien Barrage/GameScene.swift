@@ -57,9 +57,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var ufoSpawnTimer: TimeInterval = 0
     private var nextUfoSpawnInterval: TimeInterval = 0
 
-    // Shield barriers
-    private var shieldBarriers: [ShieldBarrierEntity] = []
-
     // Overlay
     private var overlayNode: SKNode?
 
@@ -83,7 +80,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         setupPlayer()
         setupAliens()
-        setupShieldBarriers()
         setupScoreDisplay()
         setupLivesDisplay()
         nextUfoSpawnInterval = randomUFOInterval()
@@ -155,28 +151,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         addChild(livesDisplay.node)  // UI stays on scene, not worldNode
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
-    }
-
-    private func setupShieldBarriers() {
-        // Remove any existing barriers
-        for barrier in shieldBarriers {
-            barrier.spriteComponent.node.removeFromParent()
-        }
-        shieldBarriers.removeAll()
-
-        guard GameConstants.shieldBarriersEnabled else { return }
-
-        let barrierCount = 4
-        let spacing = size.width / CGFloat(barrierCount + 1)
-        let yPosition: CGFloat = 200
-
-        for i in 1...barrierCount {
-            let xPos = spacing * CGFloat(i)
-            let barrier = ShieldBarrierEntity(position: CGPoint(x: xPos, y: yPosition))
-            worldNode.addChild(barrier.spriteComponent.node)
-            entities.append(barrier)
-            shieldBarriers.append(barrier)
-        }
     }
 
     // MARK: - Bullet Spawning
@@ -259,7 +233,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             handleGameOverTap()
             return
         }
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
 
         guard let touch = touches.first else { return }
         touchStartLocation = touch.location(in: self)
@@ -267,7 +241,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let touch = touches.first, let startLoc = touchStartLocation else { return }
         let currentLoc = touch.location(in: self)
         let deltaX = currentLoc.x - startLoc.x
@@ -275,12 +249,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         touchStartLocation = nil
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         touchStartLocation = nil
     }
 
@@ -335,23 +309,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             return
         }
 
-        // Player bullet hits shield barrier
-        if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.shield) ||
-           (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.shield) {
-            let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
-            let shieldBody = maskA == GameConstants.PhysicsCategory.shield ? bodyA : bodyB
-            handleBulletHitsShield(bulletBody: bulletBody, shieldBody: shieldBody)
-            return
-        }
-
-        // Enemy bullet hits shield barrier
-        if (maskA == GameConstants.PhysicsCategory.enemyBullet && maskB == GameConstants.PhysicsCategory.shield) ||
-           (maskB == GameConstants.PhysicsCategory.enemyBullet && maskA == GameConstants.PhysicsCategory.shield) {
-            let bulletBody = maskA == GameConstants.PhysicsCategory.enemyBullet ? bodyA : bodyB
-            let shieldBody = maskA == GameConstants.PhysicsCategory.shield ? bodyA : bodyB
-            handleBulletHitsShield(bulletBody: bulletBody, shieldBody: shieldBody)
-            return
-        }
     }
 
     // MARK: - Collision Handlers
@@ -409,7 +366,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Shield powerup absorbs the hit
         if playerEntity.hasShield {
-            AudioManager.shared.play(GameConstants.Sound.shieldHit)
             playerEntity.clearPowerup()
             return
         }
@@ -426,7 +382,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func handlePlayerBulletHitsUFO(bulletBody: SKPhysicsBody, ufoBody: SKPhysicsBody) {
-        guard gameState == .playing else { return }
+        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let bulletNode = bulletBody.node as? SKSpriteNode,
               let ufoNode = ufoBody.node as? SKSpriteNode else { return }
 
@@ -480,35 +436,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         ])
         let remove = SKAction.removeFromParent()
         powerupNode.run(SKAction.sequence([pulse, remove]))
-    }
-
-    private func handleBulletHitsShield(bulletBody: SKPhysicsBody, shieldBody: SKPhysicsBody) {
-        guard let bulletNode = bulletBody.node,
-              let shieldNode = shieldBody.node as? SKSpriteNode,
-              let barrier = shieldNode.userData?["entity"] as? ShieldBarrierEntity else { return }
-
-        AudioManager.shared.play(GameConstants.Sound.shieldHit)
-
-        // Spark effect at impact
-        ParticleEffects.spawnSparkBurst(at: bulletNode.position, in: self)
-
-        let isDead = barrier.healthComponent.takeDamage(1)
-
-        if isDead {
-            shieldNode.removeFromParent()
-            shieldBarriers.removeAll { $0 === barrier }
-        } else {
-            barrier.updateVisual()
-
-            // Flash effect
-            let flash = SKAction.sequence([
-                SKAction.fadeAlpha(to: 0.3, duration: 0.05),
-                SKAction.fadeAlpha(to: CGFloat(barrier.healthComponent.currentHP) / CGFloat(barrier.healthComponent.maxHP) * 0.6 + 0.4, duration: 0.05)
-            ])
-            shieldNode.run(flash)
-        }
-
-        bulletNode.removeFromParent()
     }
 
     // MARK: - Player Death & Game Over
@@ -609,7 +536,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             }
         }
         entities.removeAll()
-        shieldBarriers.removeAll()
 
         // Remove formation (unhide first in case it was hidden during game over)
         alienFormation?.formationNode.isHidden = false
@@ -636,7 +562,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Re-setup
         setupPlayer()
         setupAliens()
-        setupShieldBarriers()
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
     }
@@ -661,8 +586,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         gameState = .levelTransition
         currentLevel += 1
-        playerEntity.shootingComponent.isFiring = false
-        playerEntity.clearPowerup()
 
         // Remove enemy bullets immediately — no reason to let them kill the player after clearing
         worldNode.enumerateChildNodes(withName: "enemyBullet") { node, _ in
@@ -733,6 +656,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func showLevelOverlay() {
+        playerEntity.shootingComponent.isFiring = false
+        playerEntity.clearPowerup()
+
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
 
@@ -786,9 +712,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Create new formation (setupAliens uses LevelManager)
         setupAliens()
-
-        // Respawn shield barriers
-        setupShieldBarriers()
 
         // Reset player position
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: 80)
@@ -853,11 +776,18 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let dt = currentTime - lastUpdateTime
 
-        if gameState == .playing {
+        if gameState == .playing || gameState == .levelTransition {
             for entity in entities {
                 entity.update(deltaTime: dt)
             }
 
+            // Track UFO removal (flew off-screen)
+            if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
+                ufoEntity = nil
+            }
+        }
+
+        if gameState == .playing {
             alienFormation?.update(deltaTime: dt)
 
             // Enemy fire timer
@@ -873,11 +803,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ufoSpawnTimer = 0
                 nextUfoSpawnInterval = randomUFOInterval()
                 spawnUFO()
-            }
-
-            // Track UFO removal (flew off-screen)
-            if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
-                ufoEntity = nil
             }
 
             // Check if aliens reached the bottom (instant game over)
