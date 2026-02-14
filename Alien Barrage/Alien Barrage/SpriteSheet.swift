@@ -47,7 +47,7 @@ class SpriteSheet {
         "alienBoss3": CGRect(x: 1714, y: 15, width: 280, height: 265),
 
         // Projectiles - bottom strip of top-right quadrant
-        "playerBullet": CGRect(x: 1190, y: 650, width: 68, height: 275),
+        "playerBullet": CGRect(x: 1145, y: 580, width: 105, height: 315),
         "playerMissile": CGRect(x: 1450, y: 730, width: 48, height: 82),
         "enemyBullet": CGRect(x: 1507, y: 657, width: 474, height: 111),
 
@@ -128,6 +128,12 @@ class SpriteSheet {
         if let powerupTexture = PowerupSpinSheet.shared.baseTexture(named: name) {
             textureCache[name] = powerupTexture
             return powerupTexture
+        }
+
+        // Explosions are now sourced from a dedicated spritesheet.
+        if let explosionTexture = ExplosionSpriteSheet.shared.sprite(named: name) {
+            textureCache[name] = explosionTexture
+            return explosionTexture
         }
 
         guard let pixelRect = spriteRects[name] else {

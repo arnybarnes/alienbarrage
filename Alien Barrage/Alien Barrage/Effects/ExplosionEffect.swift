@@ -14,22 +14,25 @@ enum ExplosionEffect {
     }
 
     private static func spawnExplosion(at position: CGPoint, in scene: SKScene) {
-        guard let tex1 = SpriteSheet.shared.sprite(named: "explosionGreen1"),
-              let tex2 = SpriteSheet.shared.sprite(named: "explosionGreen2"),
-              let tex3 = SpriteSheet.shared.sprite(named: "explosionGreen3") else { return }
+        let frames = ExplosionSpriteSheet.shared.randomFrames()
+        guard let firstFrame = frames.first else { return }
 
-        let explosionNode = SKSpriteNode(texture: tex1, size: CGSize(width: 50, height: 50))
+        let maxFrameWidth = frames.map { $0.size().width }.max() ?? max(CGFloat(1.0), firstFrame.size().width)
+        let targetWidth = CGFloat.random(in: 58...72)
+        let baseScale = targetWidth / maxFrameWidth
+
+        let explosionNode = SKSpriteNode(texture: firstFrame)
         explosionNode.position = position
         explosionNode.zPosition = GameConstants.ZPosition.explosion
+        explosionNode.alpha = 1.0
+        explosionNode.setScale(baseScale)
         scene.addChild(explosionNode)
 
-        let animate = SKAction.animate(with: [tex1, tex2, tex3], timePerFrame: 0.1, resize: false, restore: false)
-        let fadeOut = SKAction.fadeOut(withDuration: 0.2)
-        let scaleUp = SKAction.scale(to: 1.5, duration: 0.2)
-        let fadeAndScale = SKAction.group([fadeOut, scaleUp])
+        let frameAnimation = SKAction.animate(with: frames, timePerFrame: 0.08, resize: true, restore: false)
+        let hold = SKAction.wait(forDuration: 0.02)
         let remove = SKAction.removeFromParent()
 
-        explosionNode.run(SKAction.sequence([animate, fadeAndScale, remove]))
+        explosionNode.run(SKAction.sequence([frameAnimation, hold, remove]))
     }
 
     private static func spawnScorePopup(at position: CGPoint, in scene: SKScene, scoreValue: Int) {
