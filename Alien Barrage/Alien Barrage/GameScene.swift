@@ -45,7 +45,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Game state
     private var gameState: GameState = .playing
-    private var currentLevel: Int = 3  // DEBUG: start at 3 for bonus round testing
+    private var currentLevel: Int = 1
 
     // Lives
     private var livesDisplay: LivesDisplay!

@@ -184,7 +184,7 @@ The results screen appears as a centered overlay (similar style to the level ove
 
 ---
 
-## Phase 8: Edge Cases & Polish [ ]
+## Phase 8: Edge Cases & Polish [x]
 
 - **Player stops shooting**: Aliens simply fly off-screen. Missed aliens count against the hit total.
 - **Active powerups**: Carry over from the previous level normally. Spread shot is particularly useful here. Timers continue to tick.
