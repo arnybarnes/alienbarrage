@@ -342,7 +342,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Attach swoop sound to the alien node — stops automatically when node is removed
         let swoopSound = GameConstants.Sound.alienSwoop
-        if !swoopSound.isEmpty {
+        if !swoopSound.isEmpty && !AudioManager.shared.isMuted(swoopSound) {
             let audioNode = SKAudioNode(fileNamed: swoopSound)
             audioNode.autoplayLooped = false
             audioNode.name = "swoopSound"
@@ -1192,7 +1192,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Looping ambience attached to UFO node — stops when node is removed
         let ambienceSound = GameConstants.Sound.ufoAmbience
-        if !ambienceSound.isEmpty {
+        if !ambienceSound.isEmpty && !AudioManager.shared.isMuted(ambienceSound) {
             let audioNode = SKAudioNode(fileNamed: ambienceSound)
             audioNode.autoplayLooped = true
             audioNode.name = "ufoAmbience"
