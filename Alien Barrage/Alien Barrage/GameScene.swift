@@ -45,7 +45,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Game state
     private var gameState: GameState = .playing
-    private var currentLevel: Int = 1
+    private var currentLevel: Int = 3  // DEBUG: start at 3 for bonus round testing
 
     // Lives
     private var livesDisplay: LivesDisplay!
@@ -73,6 +73,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Respawn state — pauses enemy attacks during glitch-in animation
     private var isRespawning: Bool = false
+
+    // Bonus round — disables formation combat mechanics
+    private var bonusRoundActive: Bool = false
+    private var bonusAliensTotal: Int = 0
+    private var bonusAliensResolved: Int = 0  // killed or exited
 
     // Overlay
     private var overlayNode: SKNode?
@@ -104,18 +109,28 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         scoreManager.scoreMultiplier = settings?.scoreMultiplier ?? 1.0
         setupPlayer()
-        setupAliens()
         setupScoreDisplay()
         setupLivesDisplay()
         setupPowerupIndicator()
         nextUfoSpawnInterval = randomUFOInterval()
 
-        // Animate first level entrance
-        playerEntity.shootingComponent.isFiring = false
-        gameState = .levelTransition
-        AudioManager.shared.play(GameConstants.Sound.levelStart)
-        alienFormation?.animateEntrance { [weak self] in
-            self?.gameState = .playing
+        let config = LevelManager.config(forLevel: currentLevel)
+        bonusRoundActive = config.isBonusRound
+
+        if bonusRoundActive {
+            print("Bonus round active for level \(currentLevel)")
+            gameState = .playing
+            startBonusRound()
+        } else {
+            setupAliens()
+
+            // Animate first level entrance
+            playerEntity.shootingComponent.isFiring = false
+            gameState = .levelTransition
+            AudioManager.shared.play(GameConstants.Sound.levelStart)
+            alienFormation?.animateEntrance { [weak self] in
+                self?.gameState = .playing
+            }
         }
 
         // Pause on background
@@ -410,6 +425,192 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         alienFormation?.swooperDestroyed()
     }
 
+    // MARK: - Bonus Round
+
+    private func startBonusRound() {
+        bonusAliensTotal = 40
+        bonusAliensResolved = 0
+
+        for wave in 0..<5 {
+            let delay = TimeInterval(wave) * 2.0
+            run(SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.run { [weak self] in
+                    self?.spawnBonusWave(wave)
+                }
+            ]), withKey: "bonusWave\(wave)")
+        }
+    }
+
+    private func spawnBonusWave(_ waveIndex: Int) {
+        for i in 0..<8 {
+            let delay = TimeInterval(i) * 0.15
+            run(SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.run { [weak self] in
+                    self?.spawnBonusAlien(wave: waveIndex, index: i)
+                }
+            ]))
+        }
+    }
+
+    private func spawnBonusAlien(wave: Int, index: Int) {
+        let alien = AlienEntity(type: .small, row: 0, col: 0)
+        alien.isSwooping = true  // use swooping cleanup path in collision handler
+
+        let node = alien.spriteComponent.node
+        node.removeAction(forKey: "alienAliveMotion")
+        node.setScale(1.0)
+
+        let path = buildBonusPath(wave: wave, index: index)
+        node.position = path.currentPoint
+
+        worldNode.addChild(node)
+        entities.append(alien)
+
+        let follow = SKAction.follow(path, asOffset: false, orientToPath: false, duration: 3.0)
+        let cleanup = SKAction.run { [weak self, weak alien] in
+            guard let self, let alien, alien.isAlive else { return }
+            alien.isAlive = false
+            let n = alien.spriteComponent.node
+            n.removeAllActions()
+            n.removeFromParent()
+            self.bonusAliensResolved += 1
+            self.checkBonusRoundComplete()
+        }
+        node.run(SKAction.sequence([follow, cleanup]), withKey: "bonusFlightPath")
+    }
+
+    private func buildBonusPath(wave: Int, index: Int) -> CGMutablePath {
+        let w = size.width
+        let h = size.height
+        let m: CGFloat = 60  // off-screen margin
+        let path = CGMutablePath()
+
+        switch wave {
+        case 0:
+            // Top-center split: 0-3 arc left, 4-7 arc right
+            if index < 4 {
+                path.move(to: CGPoint(x: w * 0.5, y: h + m))
+                path.addCurve(
+                    to: CGPoint(x: -m, y: h * 0.15),
+                    control1: CGPoint(x: w * 0.3, y: h * 0.75),
+                    control2: CGPoint(x: w * 0.05, y: h * 0.4)
+                )
+            } else {
+                path.move(to: CGPoint(x: w * 0.5, y: h + m))
+                path.addCurve(
+                    to: CGPoint(x: w + m, y: h * 0.15),
+                    control1: CGPoint(x: w * 0.7, y: h * 0.75),
+                    control2: CGPoint(x: w * 0.95, y: h * 0.4)
+                )
+            }
+
+        case 1:
+            // Right-side S-curve across screen
+            path.move(to: CGPoint(x: w + m, y: h * 0.7))
+            path.addCurve(
+                to: CGPoint(x: w * 0.35, y: h * 0.5),
+                control1: CGPoint(x: w * 0.75, y: h * 0.9),
+                control2: CGPoint(x: w * 0.3, y: h * 0.7)
+            )
+            path.addCurve(
+                to: CGPoint(x: -m, y: h * 0.3),
+                control1: CGPoint(x: w * 0.4, y: h * 0.3),
+                control2: CGPoint(x: w * 0.15, y: h * 0.15)
+            )
+
+        case 2:
+            // Bottom corners X: 0-3 bottom-left to top-right, 4-7 bottom-right to top-left
+            if index < 4 {
+                path.move(to: CGPoint(x: -m, y: -m))
+                path.addCurve(
+                    to: CGPoint(x: w + m, y: h + m),
+                    control1: CGPoint(x: w * 0.25, y: h * 0.45),
+                    control2: CGPoint(x: w * 0.65, y: h * 0.65)
+                )
+            } else {
+                path.move(to: CGPoint(x: w + m, y: -m))
+                path.addCurve(
+                    to: CGPoint(x: -m, y: h + m),
+                    control1: CGPoint(x: w * 0.75, y: h * 0.45),
+                    control2: CGPoint(x: w * 0.35, y: h * 0.65)
+                )
+            }
+
+        case 3:
+            // Top-left spiral: clockwise loop through center, exit right
+            path.move(to: CGPoint(x: -m, y: h * 0.85))
+            path.addCurve(
+                to: CGPoint(x: w * 0.55, y: h * 0.65),
+                control1: CGPoint(x: w * 0.15, y: h + m * 0.5),
+                control2: CGPoint(x: w * 0.65, y: h * 0.9)
+            )
+            path.addCurve(
+                to: CGPoint(x: w * 0.45, y: h * 0.35),
+                control1: CGPoint(x: w * 0.25, y: h * 0.55),
+                control2: CGPoint(x: w * 0.2, y: h * 0.35)
+            )
+            path.addCurve(
+                to: CGPoint(x: w + m, y: h * 0.5),
+                control1: CGPoint(x: w * 0.7, y: h * 0.35),
+                control2: CGPoint(x: w * 0.9, y: h * 0.55)
+            )
+
+        case 4:
+            // Both sides braid: 0-3 left-to-right weave, 4-7 right-to-left weave
+            if index < 4 {
+                path.move(to: CGPoint(x: -m, y: h * 0.5))
+                path.addCurve(
+                    to: CGPoint(x: w * 0.5, y: h * 0.6),
+                    control1: CGPoint(x: w * 0.15, y: h * 0.8),
+                    control2: CGPoint(x: w * 0.35, y: h * 0.3)
+                )
+                path.addCurve(
+                    to: CGPoint(x: w + m, y: h * 0.5),
+                    control1: CGPoint(x: w * 0.65, y: h * 0.85),
+                    control2: CGPoint(x: w * 0.85, y: h * 0.35)
+                )
+            } else {
+                path.move(to: CGPoint(x: w + m, y: h * 0.5))
+                path.addCurve(
+                    to: CGPoint(x: w * 0.5, y: h * 0.4),
+                    control1: CGPoint(x: w * 0.85, y: h * 0.8),
+                    control2: CGPoint(x: w * 0.65, y: h * 0.3)
+                )
+                path.addCurve(
+                    to: CGPoint(x: -m, y: h * 0.5),
+                    control1: CGPoint(x: w * 0.35, y: h * 0.85),
+                    control2: CGPoint(x: w * 0.15, y: h * 0.35)
+                )
+            }
+
+        default:
+            // Fallback: straight across
+            path.move(to: CGPoint(x: -m, y: h * 0.5))
+            path.addLine(to: CGPoint(x: w + m, y: h * 0.5))
+        }
+
+        return path
+    }
+
+    private func checkBonusRoundComplete() {
+        guard bonusRoundActive,
+              gameState == .playing,
+              bonusAliensTotal > 0,
+              bonusAliensResolved >= bonusAliensTotal else { return }
+
+        gameState = .levelTransition
+        currentLevel += 1
+
+        // Remove remaining player bullets
+        worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
+            node.removeFromParent()
+        }
+
+        waitForClearThenShowLevel()
+    }
+
     // MARK: - Touch Handling
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -543,7 +744,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
+                if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
 
@@ -553,6 +754,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 alienNode.removeFromParent()
                 swoopingAliens.removeAll { $0 === alienEntity }
                 alienFormation?.swooperDestroyed()
+
+                if bonusRoundActive {
+                    bonusAliensResolved += 1
+                    checkBonusRoundComplete()
+                }
             } else {
                 alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
@@ -560,8 +766,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
-                // Chance to drop powerup
-                if Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
+                // Chance to drop powerup (disabled in bonus rounds)
+                if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
             }
@@ -976,6 +1182,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         swoopingAliens.removeAll()
         swoopTimer = 0
 
+        // Reset bonus round state
+        bonusAliensTotal = 0
+        bonusAliensResolved = 0
+        for i in 0..<5 { removeAction(forKey: "bonusWave\(i)") }
+
         // Reset state
         currentLevel = 1
         currentEnemyFireInterval = GameConstants.enemyFireInterval
@@ -1111,17 +1322,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         overlay.addChild(bg)
 
         let hs = GameConstants.hudScale
+        let nextConfig = LevelManager.config(forLevel: currentLevel)
 
-        let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
-        levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25 * hs)
-        overlay.addChild(levelLabel)
+        var labels: [SKLabelNode] = []
 
-        let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
-        numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35 * hs)
-        overlay.addChild(numberLabel)
+        if nextConfig.isBonusRound {
+            let bonusLabel = makeOverlayLabel(text: "BONUS ROUND", fontSize: 48, gold: true)
+            bonusLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25 * hs)
+            overlay.addChild(bonusLabel)
+            labels.append(bonusLabel)
+
+            let subtitleLabel = makeOverlayLabel(text: "Take them out!", fontSize: 28, gold: true)
+            subtitleLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35 * hs)
+            overlay.addChild(subtitleLabel)
+            labels.append(subtitleLabel)
+        } else {
+            let levelLabel = makeOverlayLabel(text: "LEVEL", fontSize: 48)
+            levelLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 25 * hs)
+            overlay.addChild(levelLabel)
+            labels.append(levelLabel)
+
+            let numberLabel = makeOverlayLabel(text: "\(currentLevel)", fontSize: 56)
+            numberLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 35 * hs)
+            overlay.addChild(numberLabel)
+            labels.append(numberLabel)
+        }
 
         // Bounce-in animation for text
-        for label in [levelLabel, numberLabel] {
+        for label in labels {
             label.setScale(0.0)
             label.run(SKAction.sequence([
                 SKAction.scale(to: 1.2, duration: 0.25),
@@ -1158,19 +1386,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Reset timers (UFO timer carries across levels so it eventually fires)
         enemyFireTimer = 0
 
-        // Create new formation (setupAliens uses LevelManager)
-        setupAliens()
+        // Check if the new level is a bonus round
+        let config = LevelManager.config(forLevel: currentLevel)
+        bonusRoundActive = config.isBonusRound
 
         // Reset player position
         playerEntity.spriteComponent.node.position = CGPoint(x: size.width / 2, y: size.height * 0.142)
 
-        // Pause firing and animate aliens appearing
-        playerEntity.shootingComponent.isFiring = false
-        gameState = .levelTransition
-        AudioManager.shared.play(GameConstants.Sound.levelStart)
+        if bonusRoundActive {
+            print("Bonus round active for level \(currentLevel)")
+            gameState = .playing
+            startBonusRound()
+        } else {
+            // Create new formation (setupAliens uses LevelManager)
+            setupAliens()
 
-        alienFormation?.animateEntrance { [weak self] in
-            self?.gameState = .playing
+            // Pause firing and animate aliens appearing
+            playerEntity.shootingComponent.isFiring = false
+            gameState = .levelTransition
+            AudioManager.shared.play(GameConstants.Sound.levelStart)
+
+            alienFormation?.animateEntrance { [weak self] in
+                self?.gameState = .playing
+            }
         }
     }
 
@@ -1207,12 +1445,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - UI Helpers
 
-    private func makeOverlayLabel(text: String, fontSize: CGFloat) -> SKLabelNode {
+    private func makeOverlayLabel(text: String, fontSize: CGFloat, gold: Bool = false) -> SKLabelNode {
         let scaledSize = fontSize * GameConstants.hudScale
         let label = SKLabelNode(fontNamed: "Menlo-Bold")
         label.text = text
         label.fontSize = scaledSize
-        label.fontColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
+        label.fontColor = gold
+            ? SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+            : SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 1.0)
         label.horizontalAlignmentMode = .center
         label.verticalAlignmentMode = .center
 
@@ -1220,7 +1460,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let shadow = SKLabelNode(fontNamed: "Menlo-Bold")
         shadow.text = text
         shadow.fontSize = scaledSize
-        shadow.fontColor = SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
+        shadow.fontColor = gold
+            ? SKColor(red: 0.4, green: 0.3, blue: 0.05, alpha: 1.0)
+            : SKColor(red: 0.1, green: 0.3, blue: 0.1, alpha: 1.0)
         shadow.horizontalAlignmentMode = .center
         shadow.verticalAlignmentMode = .center
         shadow.position = CGPoint(x: 2, y: -2)
@@ -1319,14 +1561,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         if gameState == .playing && !isRespawning {
             alienFormation?.update(deltaTime: dt)
 
-            // Update player vertical ceiling: 1 ship height below lowest alien
-            if let lowestY = alienFormation?.lowestAlienY() {
+            // Update player vertical ceiling
+            if bonusRoundActive {
+                playerEntity.movementComponent.maxY = size.height * 0.9
+            } else if let lowestY = alienFormation?.lowestAlienY() {
                 let ceiling = lowestY - PlayerEntity.shipSize.height
                 playerEntity.movementComponent.maxY = max(playerEntity.movementComponent.minY, ceiling)
             }
 
-            // Enemy fire timer (paused during respawn)
-            if !isRespawning {
+            // Enemy fire timer (paused during respawn and bonus rounds)
+            if !isRespawning && !bonusRoundActive {
                 enemyFireTimer += dt
                 if enemyFireTimer >= currentEnemyFireInterval {
                     enemyFireTimer = 0
@@ -1334,32 +1578,36 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
             }
 
-            // UFO spawn timer
-            ufoSpawnTimer += dt
-            if ufoSpawnTimer >= nextUfoSpawnInterval {
-                ufoSpawnTimer = 0
-                nextUfoSpawnInterval = randomUFOInterval()
-                spawnUFO()
+            // UFO spawn timer (disabled during bonus rounds)
+            if !bonusRoundActive {
+                ufoSpawnTimer += dt
+                if ufoSpawnTimer >= nextUfoSpawnInterval {
+                    ufoSpawnTimer = 0
+                    nextUfoSpawnInterval = randomUFOInterval()
+                    spawnUFO()
+                }
             }
 
-            // Swoop timer (paused during respawn)
-            if !isRespawning {
+            // Swoop timer (paused during respawn and bonus rounds)
+            if !isRespawning && !bonusRoundActive {
                 swoopTimer += dt
             }
-            if swoopTimer >= currentSwoopInterval {
+            if swoopTimer >= currentSwoopInterval && !bonusRoundActive {
                 swoopTimer = 0
                 initiateSwoop()
             }
 
             // Pause firing when nothing to shoot at, during respawn, or resume if UFO appears
             let shouldFire = !isRespawning &&
-                ((alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil)
+                ((alienFormation?.aliveCount ?? 0) > 0 || !swoopingAliens.isEmpty || ufoEntity != nil || bonusRoundActive)
             if shouldFire != playerEntity.shootingComponent.isFiring {
                 playerEntity.shootingComponent.isFiring = shouldFire
             }
 
-            // Check if aliens reached the bottom (instant game over)
-            checkAliensReachedBottom()
+            // Check if aliens reached the bottom (instant game over, disabled in bonus rounds)
+            if !bonusRoundActive {
+                checkAliensReachedBottom()
+            }
 
             // Check level completion
             checkLevelComplete()

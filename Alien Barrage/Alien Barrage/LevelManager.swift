@@ -13,6 +13,7 @@ struct LevelConfig {
     let fireInterval: TimeInterval
     let alienHPBonus: Int
     let maxSimultaneousSwoops: Int
+    let isBonusRound: Bool
 }
 
 enum LevelManager {
@@ -26,7 +27,8 @@ enum LevelManager {
                 baseSpeed: 40,
                 fireInterval: 2.0,
                 alienHPBonus: 0,
-                maxSimultaneousSwoops: 1
+                maxSimultaneousSwoops: 1,
+                isBonusRound: false
             )
         case 2:
             return LevelConfig(
@@ -35,9 +37,11 @@ enum LevelManager {
                 baseSpeed: 48,
                 fireInterval: 1.8,
                 alienHPBonus: 0,
-                maxSimultaneousSwoops: 1
+                maxSimultaneousSwoops: 1,
+                isBonusRound: false
             )
         default:
+            let isBonusRound = level % 4 == 0
             let rows = min(5, 4 + level / 4)
             let cols = min(7, 4 + level / 2)
             let baseSpeed = CGFloat(40 + level * 8)
@@ -50,7 +54,8 @@ enum LevelManager {
                 baseSpeed: baseSpeed,
                 fireInterval: fireInterval,
                 alienHPBonus: alienHPBonus,
-                maxSimultaneousSwoops: maxSwoops
+                maxSimultaneousSwoops: maxSwoops,
+                isBonusRound: isBonusRound
             )
         }
     }
