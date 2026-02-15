@@ -98,25 +98,27 @@ enum GameConstants {
     // MARK: - Sound File Names
     // Empty string = sound disabled. Set to a filename (e.g. "shoot.wav") to enable.
     struct Sound {
-        static let playerShoot         = "SFX_SciFiLaserShotFlat1.wav"
-        static let playerDeath         = "SFX_Explosionv1.wav"
-        static let enemyDeath          = "SFX_Explosion5.wav"
+        static let playerShoot         = "SFX_SciFiLaserShotFlat5.wav"
+        static let playerDeath         = "SFX_Explosion8.wav"
+        static let enemyDeath          = "SFX_ImpactCraftFunnyPop1.wav"
         static let enemyShoot          = "SFX_SciFiLaserShotFlat7.wav"
         static let explosion           = "SFX_Explosion1.wav"
         static let powerupCollect      = "SFX_PowerUpv1.wav"
-        static let powerupRapidFire    = ""
-        static let powerupSpreadShot   = ""
-        static let powerupShield       = ""
-        static let powerupExtraLife    = "SFX_CoinRewardMusicDelay1.wav"
+        static let powerupRapidFire    = "SFX_CoinRewardMusical4.wav"
+        static let powerupSpreadShot   = "SFX_CoinRewardMusical3.wav"
+        static let powerupShield       = "SFX_CoinRewardMusicDelay11.wav"
+        static let powerupExtraLife    = "SFX_CoinRewardMusical8.wav"
         static let powerupExpire       = "SFX_SlideDownv1.wav"
         static let ufoAppear           = "SFX_SciFiEngine1.wav"
+        static let ufoAmbience         = "SFX_AmbienceSpaceVoidShip2.wav"
         static let ufoDestroyed        = "SFX_Explosion7.wav"
-        static let levelStart          = "SFX_WhooshReverseRise1.wav"
+        static let levelStart          = "SFX_WhooshSciFiPassByShip3.wav"
         static let gameOver            = "SFX_FanfareMusicLose1.wav"
         static let menuSelect          = "SFX_UiOptionChangev1.wav"
-        static let playerHit           = "SFX_GetHitv3.wav"
+        static let playerHit           = "SFX_Explosion5.wav"
         static let extraLife           = "SFX_CoinRewardMusicDelay8.wav"
         static let highScore           = "SFX_FanfareMusicWin1.wav"
+        static let alienSwoop          = "SFX_SciFiEnginePitchDown2.wav"
     }
 
     // MARK: - Alien Swooping

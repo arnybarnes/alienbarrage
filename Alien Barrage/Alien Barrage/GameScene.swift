@@ -282,11 +282,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Powerup Spawning
 
     private func spawnPowerup(at position: CGPoint) {
-        var type = PowerupType.random()
-        if type == .extraLife && playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
-            // Re-roll once to avoid extra life when player is at max ships
-            type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
+        // Exclude powerups the player already has active (rapid fire and spread shot don't stack)
+        var excluded: Set<PowerupType> = []
+        if playerEntity.activePowerups.contains(.rapidFire) { excluded.insert(.rapidFire) }
+        if playerEntity.activePowerups.contains(.spreadShot) { excluded.insert(.spreadShot) }
+        if playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
+            excluded.insert(.extraLife)
         }
+
+        let candidates = PowerupType.allCases.filter { !excluded.contains($0) }
+        guard let type = candidates.randomElement() else { return }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
         worldNode.addChild(powerup.spriteComponent.node)
         entities.append(powerup)
@@ -334,6 +339,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         swoopingAliens.append(alien)
 
         let node = alien.spriteComponent.node
+
+        // Attach swoop sound to the alien node — stops automatically when node is removed
+        let swoopSound = GameConstants.Sound.alienSwoop
+        if !swoopSound.isEmpty {
+            let audioNode = SKAudioNode(fileNamed: swoopSound)
+            audioNode.autoplayLooped = false
+            audioNode.name = "swoopSound"
+            node.addChild(audioNode)
+            audioNode.run(SKAction.play())
+        }
 
         // Update physics so swooper can contact the player
         node.physicsBody?.contactTestBitMask |= GameConstants.PhysicsCategory.player
@@ -1174,6 +1189,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         worldNode.addChild(ufo.spriteComponent.node)
         entities.append(ufo)
         ufoEntity = ufo
+
+        // Looping ambience attached to UFO node — stops when node is removed
+        let ambienceSound = GameConstants.Sound.ufoAmbience
+        if !ambienceSound.isEmpty {
+            let audioNode = SKAudioNode(fileNamed: ambienceSound)
+            audioNode.autoplayLooped = true
+            audioNode.name = "ufoAmbience"
+            ufo.spriteComponent.node.addChild(audioNode)
+        }
     }
 
     private func removeUFO() {
