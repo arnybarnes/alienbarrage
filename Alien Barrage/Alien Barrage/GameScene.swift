@@ -455,17 +455,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func spawnBonusAlien(wave: Int, index: Int) {
-        let alien = AlienEntity(type: .small, row: 0, col: 0)
+        let alien = AlienEntity(type: .small, row: 0, col: wave)
         alien.isSwooping = true  // use swooping cleanup path in collision handler
 
         let node = alien.spriteComponent.node
         node.removeAction(forKey: "alienAliveMotion")
         node.setScale(1.0)
 
+        let trail = ParticleEffects.createGoldTrail()
+        trail.position = CGPoint(x: 0, y: -alien.alienType.size.height / 2)
+        trail.zPosition = -1
+        node.addChild(trail)
+
         let path = buildBonusPath(wave: wave, index: index)
         node.position = path.currentPoint
 
         worldNode.addChild(node)
+        trail.targetNode = worldNode
         entities.append(alien)
 
         let follow = SKAction.follow(path, asOffset: false, orientToPath: false, duration: 3.0)

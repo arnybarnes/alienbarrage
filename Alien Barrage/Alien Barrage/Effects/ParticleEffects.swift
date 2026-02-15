@@ -91,6 +91,36 @@ enum ParticleEffects {
         return emitter
     }
 
+    // MARK: - Gold Trail (Bonus Round)
+
+    static func createGoldTrail() -> SKEmitterNode {
+        let emitter = SKEmitterNode()
+        emitter.particleTexture = dotTexture(diameter: 6)
+        emitter.particleBirthRate = 40
+        emitter.numParticlesToEmit = 0
+        emitter.particleLifetime = 0.6
+        emitter.particleLifetimeRange = 0.2
+
+        emitter.emissionAngle = .pi * 1.5
+        emitter.emissionAngleRange = .pi / 6
+        emitter.particleSpeed = 20
+        emitter.particleSpeedRange = 10
+
+        emitter.particleAlpha = 0.7
+        emitter.particleAlphaRange = 0.2
+        emitter.particleAlphaSpeed = -1.0
+
+        emitter.particleScale = 0.5
+        emitter.particleScaleRange = 0.2
+        emitter.particleScaleSpeed = -0.3
+
+        emitter.particleColor = SKColor(red: 1.0, green: 0.85, blue: 0.2, alpha: 1.0)
+        emitter.particleColorBlendFactor = 1.0
+        emitter.particleBlendMode = .add
+
+        return emitter
+    }
+
     // MARK: - Spark Burst
 
     static func spawnSparkBurst(at position: CGPoint, in scene: SKScene) {
