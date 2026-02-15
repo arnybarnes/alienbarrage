@@ -33,8 +33,7 @@ struct InstructionsView: View {
                             "Touch and drag to move your ship. Your ship fires automatically.")
                         section("OBJECTIVE",
                             "Destroy all aliens to advance to the next level. Don't let them reach the bottom!")
-                        section("ENEMIES",
-                            "Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! All aliens die in one hit. A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
+                        enemiesSection()
                         section("SCORING",
                             "Small aliens = 100 pts. Large aliens = 200 pts. Collecting a powerup = 50 pts. Adjust the score multiplier in Settings to scale all points earned.")
                         section("LIVES",
@@ -77,6 +76,59 @@ struct InstructionsView: View {
                 .font(.system(size: 14, design: .monospaced))
                 .foregroundColor(.gray)
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func enemiesSection() -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("ENEMIES")
+                .font(.system(size: 16, weight: .bold, design: .monospaced))
+                .foregroundColor(.green)
+            Text("Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! All aliens die in one hit.")
+                .font(.system(size: 14, design: .monospaced))
+                .foregroundColor(.gray)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // Row 1: small aliens
+            HStack(spacing: 16) {
+                ForEach(1...4, id: \.self) { i in
+                    enemySprite("alienSmall\(i)", size: 40)
+                }
+                Text("100 pts")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+            .padding(.top, 6)
+
+            // Row 2: large aliens + UFO
+            HStack(spacing: 16) {
+                ForEach(1...4, id: \.self) { i in
+                    enemySprite("alienLarge\(i)", size: 40)
+                }
+                Text("200 pts")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+
+            HStack(spacing: 12) {
+                enemySprite("ufo", size: 40)
+                Text("UFO — 500 pts, 3 hits to destroy")
+                    .font(.system(size: 13, design: .monospaced))
+                    .foregroundColor(.gray)
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func enemySprite(_ name: String, size: CGFloat) -> some View {
+        Group {
+            if let uiImage = SpriteSheet.shared.uiImage(named: name) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .interpolation(.none)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(height: size)
+            }
         }
     }
 
