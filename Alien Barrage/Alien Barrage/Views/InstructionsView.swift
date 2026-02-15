@@ -36,7 +36,7 @@ struct InstructionsView: View {
                         section("ENEMIES",
                             "Aliens shoot plasma balls downward. Watch out — aliens will swoop down at you! All aliens die in one hit. A UFO occasionally flies across the top for bonus points (500 pts, 3 hits to destroy).")
                         section("SCORING",
-                            "Small aliens = 100 pts. Large aliens = 200 pts. Collecting a powerup = 50 pts.")
+                            "Small aliens = 100 pts. Large aliens = 200 pts. Collecting a powerup = 50 pts. Adjust the score multiplier in Settings to scale all points earned.")
                         section("LIVES",
                             "Start with 3 lives (varies by difficulty). Getting hit costs a life. Brief invulnerability after respawn.")
 
