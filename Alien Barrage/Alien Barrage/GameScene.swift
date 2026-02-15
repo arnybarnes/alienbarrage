@@ -27,6 +27,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // World node — all gameplay objects are children of this (allows screen shake without shaking UI)
     private var worldNode: SKNode!
+    private var starfieldNode: SKEmitterNode?
 
     // Player
     private var playerEntity: PlayerEntity!
@@ -73,6 +74,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Overlay
     private var overlayNode: SKNode?
 
+    // Impact snapshot — captured at moment of ship destruction
+    private var impactSnapshot: SKTexture?
+    private var impactPlayerPosition: CGPoint = .zero
+
     var safeAreaInsets: UIEdgeInsets = .zero
 
     convenience init(size: CGSize, settings: GameSettings) {
@@ -92,6 +97,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Starfield background
         let starfield = ParticleEffects.createStarfield(sceneSize: size)
         addChild(starfield)
+        starfieldNode = starfield
 
         scoreManager.scoreMultiplier = settings?.scoreMultiplier ?? 1.0
         setupPlayer()
@@ -543,18 +549,26 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func handleEnemyBulletHitsPlayer(bulletBody: SKPhysicsBody, playerBody: SKPhysicsBody) {
         guard let bulletNode = bulletBody.node else { return }
 
-        // Remove the bullet
-        bulletNode.removeFromParent()
-
         // Ignore if not playing or player is invulnerable
-        guard gameState == .playing else { return }
-        if playerEntity.isInvulnerable { return }
+        guard gameState == .playing else {
+            bulletNode.removeFromParent()
+            return
+        }
+        if playerEntity.isInvulnerable {
+            bulletNode.removeFromParent()
+            return
+        }
 
         // Shield powerup absorbs the hit
         if playerEntity.hasShield {
+            bulletNode.removeFromParent()
             playerEntity.clearPowerup()
             return
         }
+
+        // Capture snapshot while bullet is still visible
+        captureImpactSnapshot()
+        bulletNode.removeFromParent()
 
         AudioManager.shared.play(GameConstants.Sound.playerHit)
         let isDead = playerEntity.healthComponent.takeDamage(1)
@@ -636,17 +650,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               let alienEntity = alienNode.userData?["entity"] as? AlienEntity,
               alienEntity.isSwooping, alienEntity.isAlive else { return }
 
-        // Destroy the swooper with explosion
-        destroySwoopingAlien(alienEntity, hitPlayer: true)
-
         // Damage the player
-        if playerEntity.isInvulnerable { return }
+        if playerEntity.isInvulnerable {
+            destroySwoopingAlien(alienEntity, hitPlayer: true)
+            return
+        }
 
         if playerEntity.hasShield {
+            destroySwoopingAlien(alienEntity, hitPlayer: true)
             playerEntity.clearPowerup()
             ScreenShakeEffect.shake(node: worldNode, duration: 0.3, intensity: 6)
             return
         }
+
+        // Capture snapshot while swooper is still visible, then destroy it
+        captureImpactSnapshot()
+        destroySwoopingAlien(alienEntity, hitPlayer: true)
 
         AudioManager.shared.play(GameConstants.Sound.playerHit)
         let isDead = playerEntity.healthComponent.takeDamage(1)
@@ -706,18 +725,38 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         overlay.addChild(bg)
 
         let hs = GameConstants.hudScale
+        let cx = size.width / 2
+        let hasInset = impactSnapshot != nil
 
+        // Layout from top down: title, inset, score, [high score], button
+        let insetW: CGFloat = 300 * hs
+        let insetH: CGFloat = 210 * hs
+        let padding: CGFloat = 15 * hs
+
+        // Title at top of group
+        let titleY = size.height / 2 + (hasInset ? (insetH / 2 + padding + 30 * hs) : 40 * hs)
         let label = makeOverlayLabel(text: "GAME OVER", fontSize: 48)
-        label.position = CGPoint(x: size.width / 2, y: size.height / 2 + 40 * hs)
+        label.position = CGPoint(x: cx, y: titleY)
         overlay.addChild(label)
 
+        // Inset below title
+        if let inset = makeImpactInset(width: insetW, height: insetH) {
+            let insetY = titleY - 30 * hs - padding - insetH / 2
+            inset.position = CGPoint(x: cx, y: insetY)
+            overlay.addChild(inset)
+        }
+
+        let belowInsetY = hasInset
+            ? (titleY - 30 * hs - padding - insetH - padding * 2)
+            : (size.height / 2 - 20 * hs)
+
         let scoreLabel = makeOverlayLabel(text: "SCORE: \(scoreManager.currentScore)", fontSize: 28)
-        scoreLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
+        scoreLabel.position = CGPoint(x: cx, y: belowInsetY)
         overlay.addChild(scoreLabel)
 
         if isNewHigh {
             let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
-            highLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 60 * hs)
+            highLabel.position = CGPoint(x: cx, y: belowInsetY - 40 * hs)
             overlay.addChild(highLabel)
         }
         let btnW = 250 * hs
@@ -728,7 +767,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         button.strokeColor = SKColor.green.withAlphaComponent(0.5)
         button.lineWidth = 1
         button.fillColor = SKColor.green.withAlphaComponent(0.08)
-        button.position = CGPoint(x: size.width / 2, y: size.height / 2 - 110 * hs)
+        button.position = CGPoint(x: cx, y: belowInsetY - (isNewHigh ? 90 * hs : 60 * hs))
         button.name = "continueButton"
 
         let buttonLabel = SKLabelNode(fontNamed: "Menlo-Bold")
@@ -777,8 +816,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove UFO if active
         removeUFO()
 
-        // Freeze the game world
+        // Freeze the game world and dim it
         worldNode.isPaused = true
+        worldNode.alpha = 0.5
+        starfieldNode?.isPaused = true
 
         // Show "SHIP DESTROYED" message with remaining lives
         let lives = playerEntity.healthComponent.currentHP
@@ -787,13 +828,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let msgNode = SKNode()
         msgNode.zPosition = GameConstants.ZPosition.overlay
 
+        let cx = size.width / 2
+        let hasInset = impactSnapshot != nil
+        let insetW: CGFloat = 300 * hs
+        let insetH: CGFloat = 210 * hs
+        let padding: CGFloat = 15 * hs
+
+        // Title at top
+        let titleY = size.height / 2 + (hasInset ? (insetH / 2 + padding + 22 * hs) : 20 * hs)
         let destroyedLabel = makeOverlayLabel(text: "SHIP DESTROYED", fontSize: 36)
-        destroyedLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 + 20 * hs)
+        destroyedLabel.position = CGPoint(x: cx, y: titleY)
         msgNode.addChild(destroyedLabel)
+
+        // Inset below title
+        if let inset = makeImpactInset(width: insetW, height: insetH) {
+            let insetY = titleY - 22 * hs - padding - insetH / 2
+            inset.position = CGPoint(x: cx, y: insetY)
+            msgNode.addChild(inset)
+        }
+
+        let belowInsetY = hasInset
+            ? (titleY - 22 * hs - padding - insetH - padding * 2)
+            : (size.height / 2 - 20 * hs)
 
         let livesText = lives == 1 ? "1 SHIP REMAINING" : "\(lives) SHIPS REMAINING"
         let livesLabel = makeOverlayLabel(text: livesText, fontSize: 22)
-        livesLabel.position = CGPoint(x: size.width / 2, y: size.height / 2 - 20 * hs)
+        livesLabel.position = CGPoint(x: cx, y: belowInsetY)
         msgNode.addChild(livesLabel)
 
         // Fade in
@@ -812,8 +872,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     SKAction.removeFromParent()
                 ]))
 
-                // Unfreeze world
+                // Restore world opacity, unfreeze, and clean up snapshot
+                self.worldNode.alpha = 1.0
                 self.worldNode.isPaused = false
+                self.starfieldNode?.isPaused = false
+                self.impactSnapshot = nil
 
                 let respawnPos = CGPoint(x: self.size.width / 2, y: self.size.height * 0.142)
                 self.playerEntity.respawnWithGlitch(
@@ -832,6 +895,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove overlay
         overlayNode?.removeFromParent()
         overlayNode = nil
+        impactSnapshot = nil
 
         // Unpause world
         worldNode.isPaused = false
@@ -1034,6 +1098,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Remove overlay
         overlayNode?.removeFromParent()
         overlayNode = nil
+        impactSnapshot = nil
 
         // Remove old formation
         alienFormation?.formationNode.removeFromParent()
@@ -1131,6 +1196,51 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             SKAction.fadeOut(withDuration: 0.15),
             SKAction.removeFromParent()
         ]))
+    }
+
+    // MARK: - Impact Snapshot
+
+    private func captureImpactSnapshot() {
+        guard let view = self.view else { return }
+        impactPlayerPosition = playerEntity.spriteComponent.node.position
+        impactSnapshot = view.texture(from: self)
+    }
+
+    private func makeImpactInset(width: CGFloat, height: CGFloat) -> SKNode? {
+        guard let snapshot = impactSnapshot else { return nil }
+
+        let container = SKNode()
+
+        // Crop node to show the scene at actual size, centered on player
+        let cropNode = SKCropNode()
+        let maskNode = SKSpriteNode(color: .white, size: CGSize(width: width, height: height))
+        cropNode.maskNode = maskNode
+
+        let snapshotSprite = SKSpriteNode(texture: snapshot)
+        let zoomScale: CGFloat = 1.5
+        snapshotSprite.setScale(zoomScale)
+
+        // Offset so the player position is centered in the crop window
+        let texW = snapshot.size().width
+        let texH = snapshot.size().height
+        let normX = impactPlayerPosition.x / size.width
+        let normY = impactPlayerPosition.y / size.height
+        let offsetX = texW / 2 - normX * texW
+        let offsetY = texH / 2 - normY * texH
+        snapshotSprite.position = CGPoint(x: offsetX * zoomScale, y: offsetY * zoomScale)
+
+        cropNode.addChild(snapshotSprite)
+        container.addChild(cropNode)
+
+        // Green border frame
+        let borderRect = CGRect(x: -width / 2 - 1, y: -height / 2 - 1, width: width + 2, height: height + 2)
+        let border = SKShapeNode(rect: borderRect)
+        border.strokeColor = SKColor(red: 0.3, green: 0.85, blue: 0.3, alpha: 0.8)
+        border.lineWidth = 2
+        border.fillColor = .clear
+        container.addChild(border)
+
+        return container
     }
 
     // MARK: - Update
