@@ -77,6 +77,8 @@ enum GameConstants {
     static let alienSmallScore: Int = 100
     static let alienLargeScore: Int = 200
     static let powerupCollectScore: Int = 50
+    static let bonusRoundKillScore: Int = 150
+    static let bonusRoundPerfectBonus: Int = 10_000
 
     // MARK: - Powerups
     static let powerupDropChance: Double = 0.15

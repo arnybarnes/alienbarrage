@@ -85,7 +85,7 @@ Flight paths are implemented as sequences of `CGPoint` waypoints with Bézier in
 
 ---
 
-## Phase 4: Alien Visuals [ ]
+## Phase 4: Alien Visuals [x]
 
 Bonus round aliens use the **existing alien sprites** but with a twist:
 - All aliens in a single wave are the **same color/type** (one of the 4 variants).
@@ -104,7 +104,7 @@ Bonus round aliens use the **existing alien sprites** but with a twist:
 
 ---
 
-## Phase 5: Scoring [ ]
+## Phase 5: Scoring [x]
 
 ### Per-Kill Points
 Each alien destroyed during a Bonus Round is worth **150 points** (flat rate, not type-dependent).
@@ -141,7 +141,7 @@ The "PERFECT!" text pulses/glows gold.
 
 ---
 
-## Phase 6: Results Display [ ]
+## Phase 6: Results Display [x]
 
 The results screen appears as a centered overlay (similar style to the level overlay):
 
@@ -154,7 +154,7 @@ The results screen appears as a centered overlay (similar style to the level ove
 
 ---
 
-## Phase 7: Level Complete & Results Flow [ ]
+## Phase 7: Level Complete & Results Flow [x]
 
 - `checkLevelComplete()` during a bonus round triggers when all 5 waves have fully exited or been destroyed.
 - Track `bonusRoundWavesComplete` (count of waves that have fully exited) and `bonusRoundHits` (aliens destroyed).

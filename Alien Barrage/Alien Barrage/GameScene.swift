@@ -78,6 +78,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var bonusRoundActive: Bool = false
     private var bonusAliensTotal: Int = 0
     private var bonusAliensResolved: Int = 0  // killed or exited
+    private var bonusRoundHits: Int = 0       // killed only (for scoring)
 
     // Overlay
     private var overlayNode: SKNode?
@@ -430,6 +431,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func startBonusRound() {
         bonusAliensTotal = 40
         bonusAliensResolved = 0
+        bonusRoundHits = 0
 
         for wave in 0..<5 {
             let delay = TimeInterval(wave) * 2.0
@@ -463,6 +465,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         node.setScale(1.0)
 
         let trail = ParticleEffects.createGoldTrail()
+        trail.name = "goldTrail"
         trail.position = CGPoint(x: 0, y: -alien.alienType.size.height / 2)
         trail.zPosition = -1
         node.addChild(trail)
@@ -479,12 +482,27 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             guard let self, let alien, alien.isAlive else { return }
             alien.isAlive = false
             let n = alien.spriteComponent.node
+            self.detachGoldTrail(from: n)
             n.removeAllActions()
             n.removeFromParent()
             self.bonusAliensResolved += 1
             self.checkBonusRoundComplete()
         }
         node.run(SKAction.sequence([follow, cleanup]), withKey: "bonusFlightPath")
+    }
+
+    private func detachGoldTrail(from node: SKNode) {
+        guard let trail = node.childNode(withName: "goldTrail") as? SKEmitterNode else { return }
+        let worldPos = node.convert(trail.position, to: worldNode)
+        trail.removeFromParent()
+        trail.position = worldPos
+        trail.targetNode = nil
+        trail.particleBirthRate = 0
+        worldNode.addChild(trail)
+        trail.run(SKAction.sequence([
+            SKAction.wait(forDuration: 1.0),
+            SKAction.removeFromParent()
+        ]))
     }
 
     private func buildBonusPath(wave: Int, index: Int) -> CGMutablePath {
@@ -607,14 +625,118 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               bonusAliensResolved >= bonusAliensTotal else { return }
 
         gameState = .levelTransition
-        currentLevel += 1
+        playerEntity.shootingComponent.isFiring = false
 
         // Remove remaining player bullets
         worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
             node.removeFromParent()
         }
 
-        waitForClearThenShowLevel()
+        // Short pause before showing results
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: 0.8),
+            SKAction.run { [weak self] in
+                self?.showBonusResults()
+            }
+        ]))
+    }
+
+    private func showBonusResults() {
+        let isPerfect = bonusRoundHits >= bonusAliensTotal
+        let bonus = isPerfect ? GameConstants.bonusRoundPerfectBonus : bonusRoundHits * GameConstants.bonusRoundKillScore
+
+        // Add the end-of-round bonus to the score
+        scoreManager.addRawPoints(bonus)
+
+        AudioManager.shared.play(GameConstants.Sound.levelStart)
+
+        let overlay = SKNode()
+        overlay.zPosition = GameConstants.ZPosition.overlay
+
+        let bg = SKSpriteNode(color: SKColor(white: 0, alpha: 0.0), size: size)
+        bg.position = CGPoint(x: size.width / 2, y: size.height / 2)
+        bg.zPosition = -1
+        bg.run(SKAction.fadeAlpha(to: 0.6, duration: 0.3))
+        overlay.addChild(bg)
+
+        let hs = GameConstants.hudScale
+        let cx = size.width / 2
+        let cy = size.height / 2
+
+        // Title: "BONUS ROUND COMPLETE"
+        let titleLabel = makeOverlayLabel(text: "BONUS ROUND", fontSize: 40, gold: true)
+        titleLabel.position = CGPoint(x: cx, y: cy + 80 * hs)
+        overlay.addChild(titleLabel)
+
+        let completeLabel = makeOverlayLabel(text: "COMPLETE", fontSize: 40, gold: true)
+        completeLabel.position = CGPoint(x: cx, y: cy + 40 * hs)
+        overlay.addChild(completeLabel)
+
+        // Hit count or PERFECT!
+        if isPerfect {
+            let perfectLabel = makeOverlayLabel(text: "PERFECT!", fontSize: 44, gold: true)
+            perfectLabel.position = CGPoint(x: cx, y: cy - 15 * hs)
+            overlay.addChild(perfectLabel)
+
+            // Pulse animation for PERFECT!
+            let pulse = SKAction.sequence([
+                SKAction.scale(to: 1.15, duration: 0.4),
+                SKAction.scale(to: 1.0, duration: 0.4)
+            ])
+            perfectLabel.run(SKAction.repeatForever(pulse))
+        } else {
+            let hitLabel = makeOverlayLabel(text: "HIT: \(bonusRoundHits) / \(bonusAliensTotal)", fontSize: 34, gold: true)
+            hitLabel.position = CGPoint(x: cx, y: cy - 15 * hs)
+            overlay.addChild(hitLabel)
+        }
+
+        // Bonus value with count-up animation
+        let bonusLabel = makeOverlayLabel(text: "BONUS: 0", fontSize: 36, gold: true)
+        bonusLabel.position = CGPoint(x: cx, y: cy - 65 * hs)
+        overlay.addChild(bonusLabel)
+
+        // Animate count-up over ~1 second
+        if bonus > 0 {
+            let steps = 20
+            let stepDuration = 1.0 / Double(steps)
+            var actions: [SKAction] = [SKAction.wait(forDuration: 0.3)]  // brief pause before counting
+            for i in 1...steps {
+                let value = bonus * i / steps
+                let formatted = NumberFormatter.localizedString(from: NSNumber(value: value), number: .decimal)
+                actions.append(SKAction.run {
+                    bonusLabel.text = "BONUS: \(formatted)"
+                    // Update shadow text too
+                    if let shadow = bonusLabel.children.first as? SKLabelNode {
+                        shadow.text = bonusLabel.text
+                    }
+                })
+                actions.append(SKAction.wait(forDuration: stepDuration))
+            }
+            bonusLabel.run(SKAction.sequence(actions))
+        }
+
+        // Bounce-in animation for all labels
+        for child in overlay.children where child is SKLabelNode {
+            child.setScale(0.0)
+            child.run(SKAction.sequence([
+                SKAction.scale(to: 1.2, duration: 0.25),
+                SKAction.scale(to: 0.9, duration: 0.1),
+                SKAction.scale(to: 1.05, duration: 0.08),
+                SKAction.scale(to: 1.0, duration: 0.07)
+            ]))
+        }
+
+        addChild(overlay)
+        overlayNode = overlay
+
+        // Dismiss after 3.5 seconds, then proceed to next level
+        currentLevel += 1
+        run(SKAction.sequence([
+            SKAction.wait(forDuration: 3.5),
+            SKAction.run { [weak self] in
+                self?.startNextLevel()
+            }
+        ]), withKey: "levelStart")
     }
 
     // MARK: - Touch Handling
@@ -746,7 +868,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             if alienEntity.isSwooping {
                 // Swooper: clean up directly (already removed from grid)
-                let scoreValue = alienEntity.scoreValueComponent.value
+                let scoreValue = bonusRoundActive ? GameConstants.bonusRoundKillScore : alienEntity.scoreValueComponent.value
                 ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
                 scoreManager.addPoints(scoreValue)
 
@@ -756,12 +878,14 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
                 alienEntity.isAlive = false
                 alienEntity.isSwooping = false
+                if bonusRoundActive { detachGoldTrail(from: alienNode) }
                 alienNode.removeAllActions()
                 alienNode.removeFromParent()
                 swoopingAliens.removeAll { $0 === alienEntity }
                 alienFormation?.swooperDestroyed()
 
                 if bonusRoundActive {
+                    bonusRoundHits += 1
                     bonusAliensResolved += 1
                     checkBonusRoundComplete()
                 }
@@ -1191,6 +1315,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Reset bonus round state
         bonusAliensTotal = 0
         bonusAliensResolved = 0
+        bonusRoundHits = 0
         for i in 0..<5 { removeAction(forKey: "bonusWave\(i)") }
 
         // Reset state
