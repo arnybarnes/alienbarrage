@@ -619,7 +619,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let powerupNode = powerupBody.node as? SKSpriteNode,
               let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
 
-        AudioManager.shared.play(GameConstants.Sound.powerupCollect)
+        // Play per-powerup sound, falling back to generic collect sound
+        let powerupSound: String
+        switch powerup.type {
+        case .rapidFire:  powerupSound = GameConstants.Sound.powerupRapidFire
+        case .spreadShot: powerupSound = GameConstants.Sound.powerupSpreadShot
+        case .shield:     powerupSound = GameConstants.Sound.powerupShield
+        case .extraLife:  powerupSound = GameConstants.Sound.powerupExtraLife
+        }
+        AudioManager.shared.play(powerupSound.isEmpty ? GameConstants.Sound.powerupCollect : powerupSound)
         if GameConstants.Haptic.powerupCollected { HapticManager.shared.mediumImpact() }
 
         playerEntity.applyPowerup(powerup.type)
