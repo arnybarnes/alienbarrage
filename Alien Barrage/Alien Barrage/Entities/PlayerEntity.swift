@@ -15,11 +15,12 @@ class PlayerEntity: GKEntity {
 
     var isInvulnerable: Bool = false
 
-    // Powerup state
-    private(set) var activePowerup: PowerupType?
-    private var powerupTimer: TimeInterval = 0
-    var hasShield: Bool = false
+    // Powerup state — supports multiple simultaneous powerups
+    private(set) var activePowerups: Set<PowerupType> = []
+    private var powerupTimers: [PowerupType: TimeInterval] = [:]
+    var hasShield: Bool { activePowerups.contains(.shield) }
     private let baseFireRate: TimeInterval
+    var onPowerupCleared: ((PowerupType) -> Void)?
 
     static let shipSize = CGSize(width: 92, height: 71)   // source 315×243, preserves aspect ratio
 
@@ -89,13 +90,16 @@ class PlayerEntity: GKEntity {
     override func update(deltaTime seconds: TimeInterval) {
         super.update(deltaTime: seconds)
 
-        // Tick powerup timer for duration-based powerups
-        guard let powerup = activePowerup else { return }
-        if powerup == .extraLife { return }  // Instant, no duration
-
-        powerupTimer += seconds
-        if powerupTimer >= GameConstants.powerupDuration {
-            clearPowerup()
+        // Tick all active powerup timers
+        var expired: [PowerupType] = []
+        for type in powerupTimers.keys {
+            powerupTimers[type]! += seconds
+            if powerupTimers[type]! >= GameConstants.powerupDuration {
+                expired.append(type)
+            }
+        }
+        for type in expired {
+            clearPowerup(type)
         }
     }
 
@@ -181,11 +185,6 @@ class PlayerEntity: GKEntity {
     // MARK: - Powerups
 
     func applyPowerup(_ type: PowerupType) {
-        // Clear any existing duration-based powerup first
-        if activePowerup != nil && activePowerup != .extraLife {
-            clearPowerup()
-        }
-
         // Temporary glow flash from the powerup's color
         let node = spriteComponent.node
         let glowOn = SKAction.colorize(with: type.glowColor, colorBlendFactor: 0.6, duration: 0.15)
@@ -194,21 +193,20 @@ class PlayerEntity: GKEntity {
 
         switch type {
         case .rapidFire:
-            activePowerup = .rapidFire
-            powerupTimer = 0
+            activePowerups.insert(.rapidFire)
+            powerupTimers[.rapidFire] = 0
             shootingComponent.fireRate = baseFireRate * 0.4
 
         case .spreadShot:
-            activePowerup = .spreadShot
-            powerupTimer = 0
+            activePowerups.insert(.spreadShot)
+            powerupTimers[.spreadShot] = 0
 
         case .shield:
-            activePowerup = .shield
-            powerupTimer = 0
-            hasShield = true
+            activePowerups.insert(.shield)
+            powerupTimers[.shield] = 0
 
         case .extraLife:
-            // Instant — don't set as activePowerup (preserves current powerup)
+            // Instant — don't add to active set
             healthComponent.heal(1)
             // Flash then fade the glow back out
             let fadeOut = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.4)
@@ -216,23 +214,36 @@ class PlayerEntity: GKEntity {
         }
     }
 
-    func clearPowerup() {
-        guard activePowerup != nil else { return }
+    func clearPowerup(_ type: PowerupType) {
+        guard activePowerups.contains(type) else { return }
 
-        if activePowerup == .rapidFire {
+        activePowerups.remove(type)
+        powerupTimers.removeValue(forKey: type)
+
+        if type == .rapidFire {
             shootingComponent.fireRate = baseFireRate
         }
-        if activePowerup == .shield {
-            hasShield = false
+
+        // Update glow: show remaining powerup's color or fade out
+        if let remaining = activePowerups.first {
+            spriteComponent.node.run(
+                SKAction.colorize(with: remaining.glowColor, colorBlendFactor: 0.25, duration: 0.3),
+                withKey: "powerupGlow"
+            )
+        } else {
+            spriteComponent.node.run(
+                SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.3),
+                withKey: "powerupGlow"
+            )
         }
 
-        // Fade glow out
-        spriteComponent.node.run(
-            SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.3),
-            withKey: "powerupGlow"
-        )
+        onPowerupCleared?(type)
+    }
 
-        activePowerup = nil
-        powerupTimer = 0
+    func clearAllPowerups() {
+        let types = activePowerups
+        for type in types {
+            clearPowerup(type)
+        }
     }
 }

@@ -50,6 +50,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Lives
     private var livesDisplay: LivesDisplay!
 
+    // Powerup indicator
+    private var powerupIndicator: PowerupIndicator!
+
     // Enemy shooting
     private var enemyFireTimer: TimeInterval = 0
     private var currentEnemyFireInterval: TimeInterval = GameConstants.enemyFireInterval
@@ -104,11 +107,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
         setupScoreDisplay()
         setupLivesDisplay()
+        setupPowerupIndicator()
         nextUfoSpawnInterval = randomUFOInterval()
 
         // Animate first level entrance
         playerEntity.shootingComponent.isFiring = false
         gameState = .levelTransition
+        AudioManager.shared.play(GameConstants.Sound.levelStart)
         alienFormation?.animateEntrance { [weak self] in
             self?.gameState = .playing
         }
@@ -145,6 +150,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         playerEntity.shootingComponent.fireCallback = { [weak self] in
             self?.spawnPlayerBullet()
+        }
+        playerEntity.onPowerupCleared = { [weak self] type in
+            self?.powerupIndicator.hide(type: type)
         }
 
         playerEntity.shootingComponent.isFiring = true
@@ -194,6 +202,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
+    private func setupPowerupIndicator() {
+        powerupIndicator = PowerupIndicator(bottomInset: safeAreaInsets.bottom)
+        addChild(powerupIndicator.node)
+    }
+
     private func setupLivesDisplay() {
         livesDisplay = LivesDisplay(bottomInset: safeAreaInsets.bottom)
         addChild(livesDisplay.node)  // UI stays on scene, not worldNode
@@ -211,7 +224,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let playerPos = playerEntity.spriteComponent.node.position
         let baseY = playerPos.y + PlayerEntity.shipSize.height / 2 + 5
 
-        if playerEntity.activePowerup == .spreadShot {
+        if playerEntity.activePowerups.contains(.spreadShot) {
             // Fire 3 bullets in a fan pattern
             let angles: [CGFloat] = [-0.25, 0, 0.25]  // ~14 degrees
             for angle in angles {
@@ -269,11 +282,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Powerup Spawning
 
     private func spawnPowerup(at position: CGPoint) {
-        var type = PowerupType.random()
-        if type == .extraLife && playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
-            // Re-roll once to avoid extra life when player is at max ships
-            type = PowerupType.allCases.filter { $0 != .extraLife }.randomElement()!
+        // Exclude powerups the player already has active (rapid fire and spread shot don't stack)
+        var excluded: Set<PowerupType> = []
+        if playerEntity.activePowerups.contains(.rapidFire) { excluded.insert(.rapidFire) }
+        if playerEntity.activePowerups.contains(.spreadShot) { excluded.insert(.spreadShot) }
+        if playerEntity.healthComponent.currentHP >= GameConstants.playerMaxLivesForExtraLife {
+            excluded.insert(.extraLife)
         }
+
+        let candidates = PowerupType.allCases.filter { !excluded.contains($0) }
+        guard let type = candidates.randomElement() else { return }
         let powerup = PowerupEntity(type: type, position: position, sceneHeight: size.height)
         worldNode.addChild(powerup.spriteComponent.node)
         entities.append(powerup)
@@ -321,6 +339,16 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         swoopingAliens.append(alien)
 
         let node = alien.spriteComponent.node
+
+        // Attach swoop sound to the alien node — stops automatically when node is removed
+        let swoopSound = GameConstants.Sound.alienSwoop
+        if !swoopSound.isEmpty && !AudioManager.shared.isMuted(swoopSound) {
+            let audioNode = SKAudioNode(fileNamed: swoopSound)
+            audioNode.autoplayLooped = false
+            audioNode.name = "swoopSound"
+            node.addChild(audioNode)
+            audioNode.run(SKAction.play())
+        }
 
         // Update physics so swooper can contact the player
         node.physicsBody?.contactTestBitMask |= GameConstants.PhysicsCategory.player
@@ -562,7 +590,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Shield powerup absorbs the hit
         if playerEntity.hasShield {
             bulletNode.removeFromParent()
-            playerEntity.clearPowerup()
+            playerEntity.clearPowerup(.shield)
             return
         }
 
@@ -571,6 +599,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bulletNode.removeFromParent()
 
         AudioManager.shared.play(GameConstants.Sound.playerHit)
+        powerupIndicator.hide(type: .extraLife)
         let isDead = playerEntity.healthComponent.takeDamage(1)
         livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
 
@@ -619,10 +648,21 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let powerupNode = powerupBody.node as? SKSpriteNode,
               let powerup = powerupNode.userData?["entity"] as? PowerupEntity else { return }
 
-        AudioManager.shared.play(GameConstants.Sound.powerupCollect)
+        // Play per-powerup sound, falling back to generic collect sound
+        let powerupSound: String
+        switch powerup.type {
+        case .rapidFire:  powerupSound = GameConstants.Sound.powerupRapidFire
+        case .spreadShot: powerupSound = GameConstants.Sound.powerupSpreadShot
+        case .shield:     powerupSound = GameConstants.Sound.powerupShield
+        case .extraLife:  powerupSound = GameConstants.Sound.powerupExtraLife
+        }
+        AudioManager.shared.play(powerupSound.isEmpty ? GameConstants.Sound.powerupCollect : powerupSound)
         if GameConstants.Haptic.powerupCollected { HapticManager.shared.mediumImpact() }
 
         playerEntity.applyPowerup(powerup.type)
+
+        // Show powerup indicator (extra life stays until next ship lost)
+        powerupIndicator.show(type: powerup.type)
 
         // Update lives display if extra life + flash message
         if powerup.type == .extraLife {
@@ -658,7 +698,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         if playerEntity.hasShield {
             destroySwoopingAlien(alienEntity, hitPlayer: true)
-            playerEntity.clearPowerup()
+            playerEntity.clearPowerup(.shield)
             ScreenShakeEffect.shake(node: worldNode, duration: 0.3, intensity: 6)
             return
         }
@@ -668,6 +708,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         destroySwoopingAlien(alienEntity, hitPlayer: true)
 
         AudioManager.shared.play(GameConstants.Sound.playerHit)
+        powerupIndicator.hide(type: .extraLife)
         let isDead = playerEntity.healthComponent.takeDamage(1)
         livesDisplay.update(lives: playerEntity.healthComponent.currentHP)
         ScreenShakeEffect.shake(node: worldNode, duration: 0.4, intensity: 8)
@@ -684,7 +725,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private func handlePlayerDeath() {
         gameState = .gameOver
         playerEntity.shootingComponent.isFiring = false
-        playerEntity.clearPowerup()
+        playerEntity.clearAllPowerups()
+        powerupIndicator.hide(type: .extraLife)
 
         AudioManager.shared.play(GameConstants.Sound.playerDeath)
         if GameConstants.Haptic.playerDeath { HapticManager.shared.heavyImpact() }
@@ -947,6 +989,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         setupAliens()
         let lives = settings?.effectiveLives ?? GameConstants.playerLives
         livesDisplay.update(lives: lives)
+        powerupIndicator.hideAll()
 
         // Animate entrance
         playerEntity.shootingComponent.isFiring = false
@@ -1053,7 +1096,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func showLevelOverlay() {
         playerEntity.shootingComponent.isFiring = false
-        playerEntity.clearPowerup()
+        playerEntity.clearAllPowerups()
+        powerupIndicator.hide(type: .extraLife)
 
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
@@ -1092,7 +1136,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func startNextLevel() {
-        AudioManager.shared.play(GameConstants.Sound.levelStart)
         if GameConstants.Haptic.levelComplete { HapticManager.shared.success() }
 
         // Remove overlay
@@ -1124,6 +1167,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Pause firing and animate aliens appearing
         playerEntity.shootingComponent.isFiring = false
         gameState = .levelTransition
+        AudioManager.shared.play(GameConstants.Sound.levelStart)
 
         alienFormation?.animateEntrance { [weak self] in
             self?.gameState = .playing
@@ -1145,6 +1189,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         worldNode.addChild(ufo.spriteComponent.node)
         entities.append(ufo)
         ufoEntity = ufo
+
+        // Looping ambience attached to UFO node — stops when node is removed
+        let ambienceSound = GameConstants.Sound.ufoAmbience
+        if !ambienceSound.isEmpty && !AudioManager.shared.isMuted(ambienceSound) {
+            let audioNode = SKAudioNode(fileNamed: ambienceSound)
+            audioNode.autoplayLooped = true
+            audioNode.name = "ufoAmbience"
+            ufo.spriteComponent.node.addChild(audioNode)
+        }
     }
 
     private func removeUFO() {
