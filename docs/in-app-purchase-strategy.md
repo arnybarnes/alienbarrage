@@ -168,6 +168,103 @@ This sequence should maximize early revenue while keeping implementation scope m
 - `pre_bonus_offer_shown`
 - `pre_bonus_offer_activated`
 
+## Analytics for Monetization Optimization
+
+Track analytics with one goal: identify where intent is high, where conversion breaks, and which offers improve LTV without harming retention.
+
+Core event schema (attach to all monetization/game-economy events):
+
+- `user_id`
+- `session_id`
+- `timestamp`
+- `app_version`
+- `build_type` (`debug`, `testflight`, `release`)
+- `country_code`
+- `storefront`
+- `payer_state` (`never_paid`, `active_payer`, `lapsed_payer`)
+- `lifetime_value_usd`
+- `ab_experiment_id` / `ab_variant`
+
+Suggested monetization event set:
+
+| Event | When to fire | Key properties |
+|---|---|---|
+| `store_opened` | Player enters store screen | `entry_point` (`menu`, `game_over`, `pre_bonus`) |
+| `paywall_viewed` | Any offer modal/panel is shown | `placement`, `sku_list`, `run_score`, `current_level` |
+| `paywall_closed` | Offer dismissed without purchase | `placement`, `dismiss_reason` (`close`, `back`, `timeout`) |
+| `sku_selected` | Player taps a specific product | `sku_id`, `placement`, `price_usd` |
+| `purchase_started` | StoreKit purchase flow begins | `sku_id`, `placement`, `price_usd` |
+| `purchase_completed` | Purchase succeeds | `sku_id`, `placement`, `price_usd`, `is_intro_offer` |
+| `purchase_failed` | Purchase fails/cancelled | `sku_id`, `placement`, `failure_reason` |
+| `purchase_restored` | Restore succeeds | `sku_id`, `entitlement_type` |
+| `entitlement_granted` | Inventory/entitlement is applied | `sku_id`, `grant_type` (`consumable`, `non_consumable`) |
+| `inventory_balance_changed` | Token/booster balance changes | `item_id`, `delta`, `new_balance`, `reason` (`purchase`, `consume`, `grant`) |
+| `continue_offer_shown` | Game-over continue prompt appears | `run_score`, `level_reached`, `tokens_balance` |
+| `continue_used` | Player uses a continue token | `source` (`paid`, `free_grant`), `run_score`, `level_reached` |
+| `pre_bonus_offer_shown` | Bonus prep offer appears | `level`, `is_bonus_round`, `bonus_hunter_balance` |
+| `pre_bonus_offer_activated` | Bonus prep item is consumed | `item_id`, `level`, `run_score` |
+| `run_ended` | Run ends | `final_score`, `level_reached`, `cause_of_death`, `paid_utility_used` |
+| `bonus_round_completed` | Bonus round ends | `level`, `hits`, `perfect`, `bonus_score`, `paid_utility_used` |
+
+Recommended dashboard slices:
+
+- Funnel by placement: `paywall_viewed -> sku_selected -> purchase_started -> purchase_completed`
+- Revenue by SKU and placement
+- Conversion by player state: `never_paid` vs `active_payer` vs `lapsed_payer`
+- Retention guardrail: D1/D7 retention split by `paid_utility_used`
+- Fairness guardrail: `Classic` vs `Assisted` score and perfect-rate deltas
+
+Discovery analyses to find new monetization opportunities:
+
+- Identify the highest-frequency death windows (level bands and causes) before level 4 and level 8, then test targeted utility bundles.
+- Compare pre-bonus offer conversion by prior-run performance (`hits` in last bonus round).
+- Find high-intent non-buyers (`paywall_viewed` with repeated `sku_selected` but no `purchase_completed`) and test lower-friction bundles.
+- Track post-purchase engagement lift (sessions/run count in 7 days after first purchase).
+
+## Event Mapping (Change-Resilient)
+
+Because code will likely evolve before implementation, wire analytics to stable product behaviors (state transitions and user intents), not specific files or methods.
+
+Implementation approach:
+
+- Create a single analytics facade (for example, `Analytics.log(event:properties:)`).
+- Emit events from domain/state boundaries (run lifecycle, purchase lifecycle, offer lifecycle).
+- Keep event names and property contracts versioned in one schema file.
+- Add a lightweight QA mode that prints every event payload for validation.
+
+Suggested mapping by behavior:
+
+| Behavior boundary (stable) | Fire events |
+|---|---|
+| Run enters active play | `run_started` |
+| Run ends (death, exit, abandon) | `run_ended` |
+| Store surface is entered | `store_opened` |
+| Any monetization panel appears/disappears | `paywall_viewed`, `paywall_closed` |
+| Product is tapped | `sku_selected` |
+| Purchase flow begins/succeeds/fails | `purchase_started`, `purchase_completed`, `purchase_failed` |
+| Entitlement/inventory is granted or consumed | `entitlement_granted`, `inventory_balance_changed` |
+| Continue prompt shown and accepted | `continue_offer_shown`, `continue_used` |
+| Bonus round starts/ends | `bonus_round_started`, `bonus_round_completed` |
+| Bonus prep offer shown/consumed | `pre_bonus_offer_shown`, `pre_bonus_offer_activated` |
+
+Required properties by event group:
+
+- Run lifecycle:
+- `run_id`, `session_id`, `current_level`, `score_lane`, `paid_utility_used`
+- Offer lifecycle:
+- `placement`, `sku_list`, `current_level`, `run_score`
+- Purchase lifecycle:
+- `sku_id`, `price_usd`, `currency`, `storefront`, `transaction_id` (when available)
+- Bonus lifecycle:
+- `level`, `hits`, `perfect`, `bonus_score`, `paid_utility_used`
+
+Versioning and migration guardrails:
+
+- Add `event_schema_version` to every event.
+- Never repurpose an existing event name for different meaning; create a new event instead.
+- If properties change, keep old keys for one release with dual-write where possible.
+- Maintain an analytics changelog section in this doc for schema edits.
+
 ## Implementation Notes For Current Codebase
 
 - Add purchase/state manager (StoreKit 2 + local inventory cache).
