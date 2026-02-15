@@ -107,7 +107,7 @@ enum GameConstants {
         static let powerupRapidFire    = ""
         static let powerupSpreadShot   = ""
         static let powerupShield       = ""
-        static let powerupExtraLife    = ""
+        static let powerupExtraLife    = "SFX_CoinRewardMusicDelay1.wav"
         static let powerupExpire       = "SFX_SlideDownv1.wav"
         static let ufoAppear           = "SFX_SciFiEngine1.wav"
         static let ufoDestroyed        = "SFX_Explosion7.wav"
