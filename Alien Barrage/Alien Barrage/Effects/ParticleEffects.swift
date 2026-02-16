@@ -7,14 +7,16 @@ import SpriteKit
 
 enum ParticleEffects {
 
-    /// Creates a small circular dot texture via CoreGraphics.
-    private static func dotTexture(diameter: CGFloat) -> SKTexture {
+    /// Pre-cached dot textures (avoids CoreGraphics allocation per emitter).
+    private static let dot4 = makeDotTexture(diameter: 4)
+    private static let dot6 = makeDotTexture(diameter: 6)
+
+    private static func makeDotTexture(diameter: Int) -> SKTexture {
         let size = CGSize(width: diameter, height: diameter)
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-        let d = Int(diameter)
-        guard let ctx = CGContext(data: nil, width: d, height: d,
-                                  bitsPerComponent: 8, bytesPerRow: d * 4,
+        guard let ctx = CGContext(data: nil, width: diameter, height: diameter,
+                                  bitsPerComponent: 8, bytesPerRow: diameter * 4,
                                   space: colorSpace, bitmapInfo: bitmapInfo) else {
             return SKTexture()
         }
@@ -28,7 +30,7 @@ enum ParticleEffects {
 
     static func createStarfield(sceneSize: CGSize) -> SKEmitterNode {
         let emitter = SKEmitterNode()
-        emitter.particleTexture = dotTexture(diameter: 4)
+        emitter.particleTexture = dot4
 
         // Scale birth rate and speed with screen area so star density looks consistent
         let areaRatio = (sceneSize.width * sceneSize.height) / (390.0 * 844.0)
@@ -67,7 +69,7 @@ enum ParticleEffects {
 
     static func createEngineThrust() -> SKEmitterNode {
         let emitter = SKEmitterNode()
-        emitter.particleTexture = dotTexture(diameter: 6)
+        emitter.particleTexture = dot6
 
         emitter.particleBirthRate = 50
         emitter.particleLifetime = 0.3
@@ -95,7 +97,7 @@ enum ParticleEffects {
 
     static func createGoldTrail() -> SKEmitterNode {
         let emitter = SKEmitterNode()
-        emitter.particleTexture = dotTexture(diameter: 6)
+        emitter.particleTexture = dot6
         emitter.particleBirthRate = 40
         emitter.numParticlesToEmit = 0
         emitter.particleLifetime = 0.6
@@ -125,7 +127,7 @@ enum ParticleEffects {
 
     static func spawnSparkBurst(at position: CGPoint, in scene: SKScene) {
         let emitter = SKEmitterNode()
-        emitter.particleTexture = dotTexture(diameter: 4)
+        emitter.particleTexture = dot4
 
         emitter.particleBirthRate = 0  // We use numParticlesToEmit
         emitter.numParticlesToEmit = 8

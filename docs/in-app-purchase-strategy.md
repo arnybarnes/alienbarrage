@@ -178,9 +178,23 @@ Core event schema (attach to all monetization/game-economy events):
 - `session_id`
 - `timestamp`
 - `app_version`
+- `app_build_number`
 - `build_type` (`debug`, `testflight`, `release`)
+- `platform` (`ios`)
+- `os_version`
+- `device_model`
+- `device_class` (`phone`, `tablet`)
+- `screen_resolution`
+- `locale`
+- `timezone`
 - `country_code`
 - `storefront`
+- `network_type` (`wifi`, `cellular`, `offline`)
+- `battery_state` (`charging`, `unplugged`, `full`, `unknown`)
+- `battery_level_pct`
+- `memory_total_mb`
+- `memory_available_mb`
+- `memory_pressure_level` (`normal`, `warning`, `critical`)
 - `payer_state` (`never_paid`, `active_payer`, `lapsed_payer`)
 - `lifetime_value_usd`
 - `ab_experiment_id` / `ab_variant`
@@ -220,6 +234,24 @@ Discovery analyses to find new monetization opportunities:
 - Compare pre-bonus offer conversion by prior-run performance (`hits` in last bonus round).
 - Find high-intent non-buyers (`paywall_viewed` with repeated `sku_selected` but no `purchase_completed`) and test lower-friction bundles.
 - Track post-purchase engagement lift (sessions/run count in 7 days after first purchase).
+
+Reliability telemetry (required for monetization diagnostics):
+
+| Event | When to fire | Key properties |
+|---|---|---|
+| `handled_error` | Any caught `try/catch` (or equivalent) error path | `error_domain`, `error_code`, `error_message_sanitized`, `feature_area`, `is_recoverable` |
+| `storekit_error` | StoreKit-specific failures | `operation` (`fetch_products`, `purchase`, `verify`, `restore`), `error_code`, `sku_id` |
+| `transaction_verification_failed` | Transaction/receipt validation failure | `sku_id`, `verification_stage`, `failure_reason` |
+| `crash_detected` | App restart detects previous abnormal termination | `last_screen`, `last_action`, `last_event_name`, `oom_suspected` |
+| `fatal_error_event` | Non-recoverable internal guard/fatal state before termination (where capturable) | `feature_area`, `failure_point`, `last_known_run_state` |
+
+Reliability requirements:
+
+- Emit `handled_error` in every monetization-related catch block (store open, product fetch, purchase start, verification, entitlement grant).
+- Include the same core metadata payload on reliability events for correlation.
+- Capture breadcrumbs for the last 20-50 important actions to aid crash triage.
+- Dashboard crash/error rates by app version, device model, OS version, memory pressure, and network type.
+- Alert when `purchase_started` to `purchase_completed` conversion drops suddenly on a new build.
 
 ## Event Mapping (Change-Resilient)
 
