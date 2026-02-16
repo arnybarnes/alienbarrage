@@ -80,6 +80,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     private var bonusAliensTotal: Int = 0
     private var bonusAliensResolved: Int = 0  // killed or exited
     private var bonusRoundHits: Int = 0       // killed only (for scoring)
+    private var bonusWavePatterns: [(Int) -> CGMutablePath] = []
 
     // Overlay
     private var overlayNode: SKNode?
@@ -452,6 +453,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         bonusAliensResolved = 0
         bonusRoundHits = 0
 
+        let round = (currentLevel / 4) - 1
+        bonusWavePatterns = BonusPatterns.patterns(forBonusRound: round, screenSize: size)
+
         for wave in 0..<5 {
             let delay = TimeInterval(wave) * 2.0
             run(SKAction.sequence([
@@ -490,7 +494,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         trail.zPosition = -1
         node.addChild(trail)
 
-        let path = buildBonusPath(wave: wave, index: index)
+        let path = bonusWavePatterns[wave](index)
         node.position = path.currentPoint
 
         worldNode.addChild(node)
@@ -523,119 +527,6 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             SKAction.wait(forDuration: 1.0),
             SKAction.removeFromParent()
         ]))
-    }
-
-    private func buildBonusPath(wave: Int, index: Int) -> CGMutablePath {
-        let w = size.width
-        let h = size.height
-        let m: CGFloat = 60  // off-screen margin
-        let path = CGMutablePath()
-
-        switch wave {
-        case 0:
-            // Top-center split: 0-3 arc left, 4-7 arc right
-            if index < 4 {
-                path.move(to: CGPoint(x: w * 0.5, y: h + m))
-                path.addCurve(
-                    to: CGPoint(x: -m, y: h * 0.15),
-                    control1: CGPoint(x: w * 0.3, y: h * 0.75),
-                    control2: CGPoint(x: w * 0.05, y: h * 0.4)
-                )
-            } else {
-                path.move(to: CGPoint(x: w * 0.5, y: h + m))
-                path.addCurve(
-                    to: CGPoint(x: w + m, y: h * 0.15),
-                    control1: CGPoint(x: w * 0.7, y: h * 0.75),
-                    control2: CGPoint(x: w * 0.95, y: h * 0.4)
-                )
-            }
-
-        case 1:
-            // Right-side S-curve across screen
-            path.move(to: CGPoint(x: w + m, y: h * 0.7))
-            path.addCurve(
-                to: CGPoint(x: w * 0.35, y: h * 0.5),
-                control1: CGPoint(x: w * 0.75, y: h * 0.9),
-                control2: CGPoint(x: w * 0.3, y: h * 0.7)
-            )
-            path.addCurve(
-                to: CGPoint(x: -m, y: h * 0.3),
-                control1: CGPoint(x: w * 0.4, y: h * 0.3),
-                control2: CGPoint(x: w * 0.15, y: h * 0.15)
-            )
-
-        case 2:
-            // Bottom corners X: 0-3 bottom-left to top-right, 4-7 bottom-right to top-left
-            if index < 4 {
-                path.move(to: CGPoint(x: -m, y: -m))
-                path.addCurve(
-                    to: CGPoint(x: w + m, y: h + m),
-                    control1: CGPoint(x: w * 0.25, y: h * 0.45),
-                    control2: CGPoint(x: w * 0.65, y: h * 0.65)
-                )
-            } else {
-                path.move(to: CGPoint(x: w + m, y: -m))
-                path.addCurve(
-                    to: CGPoint(x: -m, y: h + m),
-                    control1: CGPoint(x: w * 0.75, y: h * 0.45),
-                    control2: CGPoint(x: w * 0.35, y: h * 0.65)
-                )
-            }
-
-        case 3:
-            // Top-left spiral: clockwise loop through center, exit right
-            path.move(to: CGPoint(x: -m, y: h * 0.85))
-            path.addCurve(
-                to: CGPoint(x: w * 0.55, y: h * 0.65),
-                control1: CGPoint(x: w * 0.15, y: h + m * 0.5),
-                control2: CGPoint(x: w * 0.65, y: h * 0.9)
-            )
-            path.addCurve(
-                to: CGPoint(x: w * 0.45, y: h * 0.35),
-                control1: CGPoint(x: w * 0.25, y: h * 0.55),
-                control2: CGPoint(x: w * 0.2, y: h * 0.35)
-            )
-            path.addCurve(
-                to: CGPoint(x: w + m, y: h * 0.5),
-                control1: CGPoint(x: w * 0.7, y: h * 0.35),
-                control2: CGPoint(x: w * 0.9, y: h * 0.55)
-            )
-
-        case 4:
-            // Both sides braid: 0-3 left-to-right weave, 4-7 right-to-left weave
-            if index < 4 {
-                path.move(to: CGPoint(x: -m, y: h * 0.5))
-                path.addCurve(
-                    to: CGPoint(x: w * 0.5, y: h * 0.6),
-                    control1: CGPoint(x: w * 0.15, y: h * 0.8),
-                    control2: CGPoint(x: w * 0.35, y: h * 0.3)
-                )
-                path.addCurve(
-                    to: CGPoint(x: w + m, y: h * 0.5),
-                    control1: CGPoint(x: w * 0.65, y: h * 0.85),
-                    control2: CGPoint(x: w * 0.85, y: h * 0.35)
-                )
-            } else {
-                path.move(to: CGPoint(x: w + m, y: h * 0.5))
-                path.addCurve(
-                    to: CGPoint(x: w * 0.5, y: h * 0.4),
-                    control1: CGPoint(x: w * 0.85, y: h * 0.8),
-                    control2: CGPoint(x: w * 0.65, y: h * 0.3)
-                )
-                path.addCurve(
-                    to: CGPoint(x: -m, y: h * 0.5),
-                    control1: CGPoint(x: w * 0.35, y: h * 0.85),
-                    control2: CGPoint(x: w * 0.15, y: h * 0.35)
-                )
-            }
-
-        default:
-            // Fallback: straight across
-            path.move(to: CGPoint(x: -m, y: h * 0.5))
-            path.addLine(to: CGPoint(x: w + m, y: h * 0.5))
-        }
-
-        return path
     }
 
     private func checkBonusRoundComplete() {

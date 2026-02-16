@@ -205,6 +205,51 @@ The results screen appears as a centered overlay (similar style to the level ove
 
 ---
 
+## Phase 9: Pattern Variety Per Round [x]
+
+Each bonus round now uses a **different set of 5 wave patterns**, cycling through 4 sets based on the bonus round number (`round % 4`).
+
+### Implementation
+
+- **`BonusPatterns.swift`** — enum with a library of 20 wave patterns grouped into 4 sets of 5.
+  - `static func patterns(forBonusRound:screenSize:)` returns 5 closures `(Int) -> CGMutablePath`, one per wave.
+  - `round` is 0-indexed: 0 = level 4, 1 = level 8, etc. Selects set via `round % 4`.
+- **`GameScene.swift`** — `startBonusRound()` computes the round number and stores the selected pattern closures in `bonusWavePatterns`. `spawnBonusAlien()` uses `bonusWavePatterns[wave](index)`. The old `buildBonusPath()` method was deleted.
+
+### Pattern Sets
+
+| Set | Bonus Round | Patterns |
+|-----|-------------|----------|
+| **A** | 1st (level 4), 5th (level 20), ... | Top-split, Right S-curve, X-cross, Spiral, Braid |
+| **B** | 2nd (level 8), 6th (level 24), ... | V-formation dive, Left S-curve, Figure-8, Rain, Boomerang |
+| **C** | 3rd (level 12), 7th (level 28), ... | Diamond, Top zigzag, Funnel, Corkscrew, Pinch |
+| **D** | 4th (level 16), 8th (level 32), ... | Cascade, Orbit, Swoop low, Ribbon, Starburst |
+
+### Pattern Descriptions
+
+**Set B:**
+1. **V-formation dive** — enter top, split into V shape diving down, exit bottom corners
+2. **Left S-curve** — mirror of right S-curve, enter left exit right
+3. **Figure-8** — enter left, loop through center twice, exit right
+4. **Rain** — enter top spread across width, gentle drift down with slight wave, exit bottom
+5. **Boomerang** — enter right, curve left past center, loop back and exit right
+
+**Set C:**
+6. **Diamond** — 0-3 from top converge center, exit bottom; 4-7 from bottom converge center, exit top
+7. **Top zigzag** — enter top-left, zigzag descending across screen, exit bottom-right
+8. **Funnel** — enter wide from top, converge to narrow center point, fan out exiting bottom
+9. **Corkscrew** — enter left, tight sinusoidal wave across screen, exit right
+10. **Pinch** — 0-3 top-left curving down-right, 4-7 bottom-right curving up-left (crossing)
+
+**Set D:**
+11. **Cascade** — enter top-right stepping down, each alien offset lower, exit bottom-left
+12. **Orbit** — enter right, large circular loop around screen center, exit right
+13. **Swoop low** — enter top, sharp dive to bottom, pull up and exit top opposite side
+14. **Ribbon** — enter left mid-height, gentle sine wave across, exit right
+15. **Starburst** — all enter center-top, burst outward to different exit points by index
+
+---
+
 ## Future Considerations (not in initial implementation)
 
 - Later bonus rounds (level 20+) could have faster flight paths or tighter formations.
