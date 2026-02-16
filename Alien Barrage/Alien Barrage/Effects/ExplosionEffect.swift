@@ -7,6 +7,20 @@ import SpriteKit
 
 enum ExplosionEffect {
 
+    private static var popupPool: [SKLabelNode] = []
+
+    /// Pre-create score popup label pool. Call once during scene setup.
+    static func warmUp() {
+        if popupPool.isEmpty {
+            for _ in 0..<8 {
+                let label = SKLabelNode(fontNamed: "Menlo-Bold")
+                label.horizontalAlignmentMode = .center
+                label.verticalAlignmentMode = .center
+                popupPool.append(label)
+            }
+        }
+    }
+
     /// Spawns an explosion animation and score popup at the given position.
     static func spawn(at position: CGPoint, in scene: SKScene, scoreValue: Int) {
         spawnExplosion(at: position, in: scene)
@@ -38,20 +52,31 @@ enum ExplosionEffect {
     static func spawnScorePopup(at position: CGPoint, in scene: SKScene, scoreValue: Int) {
         guard scoreValue > 0 else { return }
 
-        let popupNode = SKLabelNode(fontNamed: "Menlo-Bold")
-        popupNode.text = "+\(scoreValue)"
-        popupNode.fontSize = scoreValue >= 500 ? 24 : 20
-        popupNode.fontColor = scoreValue >= 500 ? .yellow : .green
-        popupNode.position = CGPoint(x: position.x, y: position.y + 20)
-        popupNode.zPosition = GameConstants.ZPosition.explosion
-        popupNode.horizontalAlignmentMode = .center
-        popupNode.verticalAlignmentMode = .center
-        scene.addChild(popupNode)
+        let node: SKLabelNode
+        if let pooled = popupPool.popLast() {
+            pooled.removeAllActions()
+            node = pooled
+        } else {
+            node = SKLabelNode(fontNamed: "Menlo-Bold")
+            node.horizontalAlignmentMode = .center
+            node.verticalAlignmentMode = .center
+        }
+
+        node.text = "+\(scoreValue)"
+        node.fontSize = scoreValue >= 500 ? 24 : 20
+        node.fontColor = scoreValue >= 500 ? .yellow : .green
+        node.position = CGPoint(x: position.x, y: position.y + 20)
+        node.zPosition = GameConstants.ZPosition.explosion
+        node.alpha = 1.0
+        scene.addChild(node)
 
         let moveUp = SKAction.moveBy(x: 0, y: 60, duration: 0.8)
         let fadeOut = SKAction.fadeOut(withDuration: 0.8)
         let group = SKAction.group([moveUp, fadeOut])
-        let remove = SKAction.removeFromParent()
-        popupNode.run(SKAction.sequence([group, remove]))
+        let returnToPool = SKAction.run {
+            node.removeFromParent()
+            popupPool.append(node)
+        }
+        node.run(SKAction.sequence([group, returnToPool]))
     }
 }

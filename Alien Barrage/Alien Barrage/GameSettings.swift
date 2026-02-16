@@ -13,6 +13,9 @@ class GameSettings: ObservableObject {
     @Published var autofireSpeed: Double {
         didSet { UserDefaults.standard.set(autofireSpeed, forKey: "autofireSpeed") }
     }
+    /// Debug toggle — set to false to prevent powerup drops (for perf testing)
+    var powerupsEnabled = true
+
 
     init() {
         let diffRaw = UserDefaults.standard.string(forKey: "difficulty") ?? "normal"

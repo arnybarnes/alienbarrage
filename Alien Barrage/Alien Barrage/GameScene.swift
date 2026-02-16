@@ -73,6 +73,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // Respawn state — pauses enemy attacks during glitch-in animation
     private var isRespawning: Bool = false
+    private var lastShootSoundTime: Double = 0
 
     // Bonus round — disables formation combat mechanics
     private var bonusRoundActive: Bool = false
@@ -99,6 +100,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         PerformanceLog.enabled = true
         PerformanceLog.sessionStart()
         #endif
+
+        ExplosionEffect.warmUp()
 
         backgroundColor = .black
         physicsWorld.gravity = .zero
@@ -244,7 +247,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnPlayerBullet() {
         guard !isRespawning else { return }
-        AudioManager.shared.play(GameConstants.Sound.playerShoot)
+        // Throttle shoot sound — skip if last sound was <0.15s ago (only affects rapid fire)
+        let now = CACurrentMediaTime()
+        if now - lastShootSoundTime >= 0.15 {
+            AudioManager.shared.play(GameConstants.Sound.playerShoot)
+            lastShootSoundTime = now
+        }
         if GameConstants.Haptic.playerShoot { HapticManager.shared.lightImpact() }
 
         let playerPos = playerEntity.spriteComponent.node.position
@@ -308,6 +316,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Powerup Spawning
 
     private func spawnPowerup(at position: CGPoint) {
+        guard settings?.powerupsEnabled != false else { return }
         // Exclude powerups the player already has active (rapid fire and spread shot don't stack)
         var excluded: Set<PowerupType> = []
         if playerEntity.activePowerups.contains(.rapidFire) { excluded.insert(.rapidFire) }
