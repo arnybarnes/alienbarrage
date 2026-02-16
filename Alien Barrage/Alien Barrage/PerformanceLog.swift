@@ -47,6 +47,31 @@ enum PerformanceLog {
     // Inter-frame contact tracking (contacts fire between update() calls)
     private static var contactTimeMs: Double = 0
     private static var contactCount: Int = 0
+    private static var frameContactTypeCounts: [String: Int] = [:]
+    private static var levelContactTypeCounts: [String: Int] = [:]
+
+    // Manual player-bullet collision telemetry
+    private static var manualSweepFrames = 0
+    private static var manualSweepTimeMs: Double = 0
+    private static var manualSweepMaxMs: Double = 0
+    private static var manualSweepBullets = 0
+    private static var manualSweepTargets = 0
+    private static var manualSweepCandidateRefs = 0
+    private static var manualSweepOverlapChecks = 0
+    private static var manualSweepQueuedHits = 0
+    private static var manualSweepResolvedHits = 0
+    private static var manualSweepReducedFXHits = 0
+    private static var manualSweepQueueDepthSum = 0
+    private static var manualSweepQueueDepthMax = 0
+    private static var manualSweepDetectMs: Double = 0
+    private static var manualSweepResolveMs: Double = 0
+    private static var manualSweepOutlierCount = 0
+    private static var manualHitTypeCounts: [String: Int] = [:]
+    private static var bulletCapPlayerEvictions = 0
+    private static var bulletCapPlayerNearEvictions = 0
+    private static var bulletCapPlayerFarEvictions = 0
+    private static var bulletCapPlayerSpreadOrUFOEvictions = 0
+    private static var bulletCapEnemySkips = 0
 
     // MARK: - Signposts
 
@@ -90,6 +115,66 @@ enum PerformanceLog {
         sessionErrors.append(message)
     }
 
+    static func contactType(_ type: String) {
+        guard enabled else { return }
+        frameContactTypeCounts[type, default: 0] += 1
+        levelContactTypeCounts[type, default: 0] += 1
+    }
+
+    static func manualBulletSweep(
+        bullets: Int,
+        targets: Int,
+        candidateRefs: Int,
+        overlapChecks: Int,
+        queuedHits: Int,
+        resolvedHits: Int,
+        reducedFXHits: Int,
+        queueDepth: Int,
+        detectMs: Double,
+        resolveMs: Double,
+        durationMs: Double
+    ) {
+        guard enabled else { return }
+        manualSweepFrames += 1
+        manualSweepBullets += bullets
+        manualSweepTargets += targets
+        manualSweepCandidateRefs += candidateRefs
+        manualSweepOverlapChecks += overlapChecks
+        manualSweepQueuedHits += queuedHits
+        manualSweepResolvedHits += resolvedHits
+        manualSweepReducedFXHits += reducedFXHits
+        manualSweepQueueDepthSum += queueDepth
+        if queueDepth > manualSweepQueueDepthMax { manualSweepQueueDepthMax = queueDepth }
+        manualSweepDetectMs += detectMs
+        manualSweepResolveMs += resolveMs
+        manualSweepTimeMs += durationMs
+        if durationMs > manualSweepMaxMs { manualSweepMaxMs = durationMs }
+        if durationMs >= GameConstants.Performance.manualSweepOutlierThresholdMs {
+            manualSweepOutlierCount += 1
+            writeLine("[MANUAL_SPIKE] sweep=\(String(format: "%.3f", durationMs))ms detect=\(String(format: "%.3f", detectMs))ms resolve=\(String(format: "%.3f", resolveMs))ms bullets=\(bullets) targets=\(targets) candidates=\(candidateRefs) checks=\(overlapChecks) queued=\(queuedHits) resolved=\(resolvedHits) reducedFX=\(reducedFXHits) queueDepth=\(queueDepth)")
+        }
+    }
+
+    static func manualCollisionType(_ type: String) {
+        guard enabled else { return }
+        manualHitTypeCounts[type, default: 0] += 1
+    }
+
+    static func bulletCap(
+        playerEvictions: Int = 0,
+        enemySkips: Int = 0,
+        playerNearEvictions: Int = 0,
+        playerFarEvictions: Int = 0,
+        playerSpreadOrUFOEvictions: Int = 0
+    ) {
+        guard enabled else { return }
+        if playerEvictions > 0 { bulletCapPlayerEvictions += playerEvictions }
+        if playerNearEvictions > 0 { bulletCapPlayerNearEvictions += playerNearEvictions }
+        if playerFarEvictions > 0 { bulletCapPlayerFarEvictions += playerFarEvictions }
+        if playerSpreadOrUFOEvictions > 0 { bulletCapPlayerSpreadOrUFOEvictions += playerSpreadOrUFOEvictions }
+        if enemySkips > 0 { bulletCapEnemySkips += enemySkips }
+    }
+
     // MARK: - Per-Frame Sampling
 
     static func recordFrame(
@@ -110,14 +195,42 @@ enum PerformanceLog {
         if emitterCount > peakEmitters { peakEmitters = emitterCount }
         if swoopCount > peakSwoop { peakSwoop = swoopCount }
 
-        // Log spike breakdown when frame exceeds threshold
         let dtMs = dt * 1000.0
+        let frameTotalMs = sectionDurations["FrameTotal"] ?? 0
+        let unexplainedGapMs = max(0, dtMs - frameTotalMs)
+
+        // Log large frame gaps where measured frame work does not explain dt.
+        if GameConstants.Performance.frameGapLogging &&
+            dtMs >= GameConstants.Performance.frameGapThresholdMs &&
+            unexplainedGapMs >= GameConstants.Performance.frameGapUnexplainedThresholdMs {
+            var parts: [String] = []
+            if contactCount > 0 {
+                var contactPart = "Contacts(\(contactCount))=\(String(format: "%.1f", contactTimeMs))ms"
+                if !frameContactTypeCounts.isEmpty {
+                    contactPart += " [\(formattedCounts(frameContactTypeCounts, limit: 4))]"
+                }
+                parts.append(contactPart)
+            }
+            for key in sectionOrder where key != "FrameTotal" {
+                if let dur = sectionDurations[key], dur > 0 {
+                    parts.append("\(key)=\(String(format: "%.1f", dur))ms")
+                }
+            }
+            let breakdown = parts.isEmpty ? "no-sections" : parts.joined(separator: " ")
+            writeLine("[FRAME_GAP] dt=\(String(format: "%.1f", dtMs))ms frameTotal=\(String(format: "%.1f", frameTotalMs))ms gap=\(String(format: "%.1f", unexplainedGapMs))ms entities=\(entityCount) nodes=\(nodeCount) sprites=\(spriteCount) emitters=\(emitterCount) swoop=\(swoopCount) | \(breakdown)")
+        }
+
+        // Log spike breakdown when frame exceeds threshold.
         if dtMs >= spikeThresholdMs {
             spikeCount += 1
             var parts: [String] = []
             // Contact handler time (accumulated between frames)
             if contactCount > 0 {
-                parts.append("Contacts(\(contactCount))=\(String(format: "%.1f", contactTimeMs))ms")
+                var contactPart = "Contacts(\(contactCount))=\(String(format: "%.1f", contactTimeMs))ms"
+                if !frameContactTypeCounts.isEmpty {
+                    contactPart += " [\(formattedCounts(frameContactTypeCounts, limit: 4))]"
+                }
+                parts.append(contactPart)
             }
             // update() subsections
             for key in sectionOrder {
@@ -133,6 +246,7 @@ enum PerformanceLog {
         sectionOrder.removeAll(keepingCapacity: true)
         contactTimeMs = 0
         contactCount = 0
+        frameContactTypeCounts.removeAll(keepingCapacity: true)
     }
 
     // MARK: - Level Summary
@@ -145,7 +259,30 @@ enum PerformanceLog {
         let fire = String(format: "%.2f", fireInterval)
         let mode = isBonus ? "BONUS" : "Level"
 
-        let msg = "\(mode) \(level) done | frames=\(frameCount) avg_dt=\(avgMs)ms max_dt=\(maxMs)ms spikes=\(spikeCount) | peak: entities=\(peakEntities) nodes=\(peakNodes) sprites=\(peakSprites) emitters=\(peakEmitters) swoop=\(peakSwoop) | fire=\(fire)s errors=\(errorMessages.count)"
+        var msg = "\(mode) \(level) done | frames=\(frameCount) avg_dt=\(avgMs)ms max_dt=\(maxMs)ms spikes=\(spikeCount) | peak: entities=\(peakEntities) nodes=\(peakNodes) sprites=\(peakSprites) emitters=\(peakEmitters) swoop=\(peakSwoop) | fire=\(fire)s errors=\(errorMessages.count)"
+        if !levelContactTypeCounts.isEmpty {
+            msg += " | contacts=[\(formattedCounts(levelContactTypeCounts, limit: 8))]"
+        }
+        if manualSweepFrames > 0 {
+            let frames = Double(max(1, manualSweepFrames))
+            let avgSweepMs = manualSweepTimeMs / frames
+            let avgDetectMs = manualSweepDetectMs / frames
+            let avgResolveMs = manualSweepResolveMs / frames
+            let avgBullets = Double(manualSweepBullets) / frames
+            let avgTargets = Double(manualSweepTargets) / frames
+            let avgCandidates = Double(manualSweepCandidateRefs) / frames
+            let avgQueueDepth = Double(manualSweepQueueDepthSum) / frames
+            msg += " | manualPB avg=\(String(format: "%.3f", avgSweepMs))ms (detect=\(String(format: "%.3f", avgDetectMs)) resolve=\(String(format: "%.3f", avgResolveMs))) max=\(String(format: "%.3f", manualSweepMaxMs))ms bullets=\(String(format: "%.1f", avgBullets)) targets=\(String(format: "%.1f", avgTargets)) candidates=\(String(format: "%.1f", avgCandidates)) checks=\(manualSweepOverlapChecks) queued=\(manualSweepQueuedHits) resolved=\(manualSweepResolvedHits) reducedFX=\(manualSweepReducedFXHits) queueAvg=\(String(format: "%.2f", avgQueueDepth)) queueMax=\(manualSweepQueueDepthMax) outliers=\(manualSweepOutlierCount)"
+            if !manualHitTypeCounts.isEmpty {
+                msg += " [\(formattedCounts(manualHitTypeCounts, limit: 6))]"
+            }
+        }
+        if bulletCapPlayerEvictions > 0 || bulletCapEnemySkips > 0 {
+            msg += " | bulletCap playerEvict=\(bulletCapPlayerEvictions) enemySkip=\(bulletCapEnemySkips)"
+            if bulletCapPlayerNearEvictions > 0 || bulletCapPlayerFarEvictions > 0 || bulletCapPlayerSpreadOrUFOEvictions > 0 {
+                msg += " (near=\(bulletCapPlayerNearEvictions) far=\(bulletCapPlayerFarEvictions) spreadOrUFO=\(bulletCapPlayerSpreadOrUFOEvictions))"
+            }
+        }
         writeLine(msg)
 
         // Track worst level for session summary
@@ -215,6 +352,42 @@ enum PerformanceLog {
         peakSwoop = 0
         spikeCount = 0
         errorMessages.removeAll()
+        sectionStarts.removeAll(keepingCapacity: true)
+        sectionDurations.removeAll(keepingCapacity: true)
+        sectionOrder.removeAll(keepingCapacity: true)
+        contactTimeMs = 0
+        contactCount = 0
+        frameContactTypeCounts.removeAll(keepingCapacity: true)
+        levelContactTypeCounts.removeAll(keepingCapacity: true)
+        manualSweepFrames = 0
+        manualSweepTimeMs = 0
+        manualSweepMaxMs = 0
+        manualSweepBullets = 0
+        manualSweepTargets = 0
+        manualSweepCandidateRefs = 0
+        manualSweepOverlapChecks = 0
+        manualSweepQueuedHits = 0
+        manualSweepResolvedHits = 0
+        manualSweepReducedFXHits = 0
+        manualSweepQueueDepthSum = 0
+        manualSweepQueueDepthMax = 0
+        manualSweepDetectMs = 0
+        manualSweepResolveMs = 0
+        manualSweepOutlierCount = 0
+        manualHitTypeCounts.removeAll(keepingCapacity: true)
+        bulletCapPlayerEvictions = 0
+        bulletCapPlayerNearEvictions = 0
+        bulletCapPlayerFarEvictions = 0
+        bulletCapPlayerSpreadOrUFOEvictions = 0
+        bulletCapEnemySkips = 0
+    }
+
+    private static func formattedCounts(_ counts: [String: Int], limit: Int) -> String {
+        let sorted = counts.sorted { lhs, rhs in
+            if lhs.value == rhs.value { return lhs.key < rhs.key }
+            return lhs.value > rhs.value
+        }
+        return sorted.prefix(limit).map { "\($0.key)=\($0.value)" }.joined(separator: " ")
     }
 }
 
@@ -226,6 +399,28 @@ enum PerformanceLog {
     @inlinable static func end(_ name: StaticString) {}
     @inlinable static func event(_ name: StaticString, _ message: String) {}
     @inlinable static func error(_ message: String) {}
+    @inlinable static func contactType(_ type: String) {}
+    @inlinable static func manualBulletSweep(
+        bullets: Int,
+        targets: Int,
+        candidateRefs: Int,
+        overlapChecks: Int,
+        queuedHits: Int,
+        resolvedHits: Int,
+        reducedFXHits: Int,
+        queueDepth: Int,
+        detectMs: Double,
+        resolveMs: Double,
+        durationMs: Double
+    ) {}
+    @inlinable static func manualCollisionType(_ type: String) {}
+    @inlinable static func bulletCap(
+        playerEvictions: Int = 0,
+        enemySkips: Int = 0,
+        playerNearEvictions: Int = 0,
+        playerFarEvictions: Int = 0,
+        playerSpreadOrUFOEvictions: Int = 0
+    ) {}
     @inlinable static func recordFrame(dt: TimeInterval, entityCount: Int, nodeCount: Int, spriteCount: Int, emitterCount: Int, swoopCount: Int) {}
     @inlinable static func levelComplete(level: Int, isBonus: Bool, aliveAliens: Int, fireInterval: TimeInterval) {}
     @inlinable static func sessionStart() {}

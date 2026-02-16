@@ -6,5 +6,7 @@
 	<array>
 		<string>Nosifer-Regular.ttf</string>
 	</array>
+	<key>UILaunchScreen</key>
+	<dict/>
 </dict>
 </plist>

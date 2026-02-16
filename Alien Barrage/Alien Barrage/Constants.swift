@@ -136,4 +136,43 @@ enum GameConstants {
     struct VisualFX {
         static let alienEyeGlowEnabled: Bool = false
     }
+
+    // MARK: - Performance Tuning
+    struct Performance {
+        // Feature flag: manual broadphase/narrowphase for player bullet hits (enemy + UFO).
+        static let manualPlayerBulletCollision: Bool = true
+        // Spread-shot bullets are spawned a few milliseconds apart to avoid contact bursts.
+        static let spreadShotStagger: TimeInterval = 0.018
+        // Cap active player bullets to bound manual sweep cost.
+        // Default eviction trims the farthest bullet; spread/UFO paths can preserve far-travel bullets.
+        static let maxActivePlayerBullets: Int = 24
+        // Lightweight compensation for player-bullet cap pressure in rapid/spread fire.
+        static let playerBulletCapSpeedMultiplier: CGFloat = 1.15
+        // Cap active enemy bullets to limit late-level physics churn.
+        static let maxActiveEnemyBullets: Int = 16
+        // Y-axis band size for manual player-bullet broadphase.
+        static let manualCollisionBandHeight: CGFloat = 72.0
+        // Max queued player-bullet hit resolutions to process per frame.
+        static let manualResolutionMaxPerFrame: Int = 2
+        // Max time budget for manual player-bullet hit resolution work each frame.
+        static let manualResolutionBudgetMs: Double = 4.0
+        // When backlog exceeds this, use cheaper hit VFX to protect frame time.
+        static let manualResolutionLiteFxBacklog: Int = 4
+        // Prefer low-cost impact FX in manual collision mode to reduce resolve stalls.
+        static let manualResolutionPreferLiteFX: Bool = true
+        // Logs per-frame manual sweep outliers when exceeded.
+        static let manualSweepOutlierThresholdMs: Double = 10.0
+        // Logs per-hit resolve breakdowns when a single resolve is unusually expensive.
+        static let manualResolveOutlierLogging: Bool = true
+        static let manualResolveOutlierThresholdMs: Double = 20.0
+        // Logs large frame gaps when dt is high but measured in-frame work is low.
+        static let frameGapLogging: Bool = true
+        static let frameGapThresholdMs: Double = 80.0
+        static let frameGapUnexplainedThresholdMs: Double = 25.0
+        // Minimum spacing for enemy-death sound playback to avoid per-kill audio stalls.
+        static let enemyDeathSoundMinInterval: TimeInterval = 0.08
+        // In reduced-FX mode we can suppress per-kill SFX to protect frame time.
+        static let enemyDeathSoundDuringReducedFX: Bool = false
+        static let enemyDeathSoundDuringBonusRounds: Bool = false
+    }
 }
