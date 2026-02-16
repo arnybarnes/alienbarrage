@@ -25,6 +25,14 @@ class ScoreManager {
         onScoreChanged?(currentScore)
     }
 
+    func addRawPoints(_ points: Int) {
+        currentScore += points
+        if currentScore > highScore {
+            highScore = currentScore
+        }
+        onScoreChanged?(currentScore)
+    }
+
     func reset() {
         currentScore = 0
         onScoreChanged?(currentScore)

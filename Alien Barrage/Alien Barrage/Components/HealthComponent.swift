@@ -26,8 +26,8 @@ class HealthComponent: GKComponent {
         return currentHP <= 0
     }
 
-    /// Restores HP, capped at maxHP.
+    /// Restores HP (uncapped — spawn rules gate extra-life availability).
     func heal(_ amount: Int) {
-        currentHP = min(currentHP + amount, maxHP)
+        currentHP += amount
     }
 }

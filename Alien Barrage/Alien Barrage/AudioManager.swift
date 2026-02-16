@@ -2,7 +2,24 @@ import AVFoundation
 
 class AudioManager {
     static let shared = AudioManager()
-    private var players: [String: AVAudioPlayer] = [:]
+
+    /// Pool size per sound — allows overlapping playback
+    private static let poolSize = 3
+
+    /// Pre-loaded PCM buffers and player node pools, keyed by sound name
+    private let engine = AVAudioEngine()
+    private var pools: [String: SoundPool] = [:]
+
+    private class SoundPool {
+        let buffer: AVAudioPCMBuffer
+        let nodes: [AVAudioPlayerNode]
+        var index: Int = 0
+
+        init(buffer: AVAudioPCMBuffer, nodes: [AVAudioPlayerNode]) {
+            self.buffer = buffer
+            self.nodes = nodes
+        }
+    }
 
     /// All sound file constants for muteAll/unmuteAll
     static let allSoundFiles: [String] = [
@@ -30,6 +47,38 @@ class AudioManager {
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: "mutedSounds") ?? []
         mutedSounds = Set(saved)
+        preloadAll()
+        do {
+            try engine.start()
+        } catch {
+            print("AudioManager: engine start failed — \(error)")
+        }
+    }
+
+    private func preloadAll() {
+        for soundName in Self.allSoundFiles where !soundName.isEmpty {
+            guard let url = Bundle.main.url(forResource: soundName, withExtension: nil),
+                  let file = try? AVAudioFile(forReading: url) else { continue }
+
+            let format = file.processingFormat
+            let frameCount = AVAudioFrameCount(file.length)
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else { continue }
+            do {
+                try file.read(into: buffer)
+            } catch {
+                continue
+            }
+
+            var nodes: [AVAudioPlayerNode] = []
+            for _ in 0..<Self.poolSize {
+                let node = AVAudioPlayerNode()
+                engine.attach(node)
+                engine.connect(node, to: engine.mainMixerNode, format: format)
+                nodes.append(node)
+            }
+
+            pools[soundName] = SoundPool(buffer: buffer, nodes: nodes)
+        }
     }
 
     private func saveMutedSounds() {
@@ -64,16 +113,24 @@ class AudioManager {
     func play(_ soundName: String) {
         guard !soundName.isEmpty else { return }
         guard !mutedSounds.contains(soundName) else { return }
-        guard let url = Bundle.main.url(forResource: soundName, withExtension: nil) else {
-            print("AudioManager: file not found — \(soundName)")
+        guard let pool = pools[soundName] else {
+            let msg = "AudioManager: no pool for — \(soundName)"
+            print(msg)
+            PerformanceLog.error(msg)
             return
         }
-        do {
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.play()
-            players[soundName] = player  // retain until playback finishes
-        } catch {
-            print("AudioManager: failed to play \(soundName) — \(error)")
+
+        // Restart engine if interrupted (e.g., phone call)
+        if !engine.isRunning {
+            try? engine.start()
         }
+
+        // Round-robin through player nodes
+        let node = pool.nodes[pool.index]
+        pool.index = (pool.index + 1) % pool.nodes.count
+
+        node.stop()
+        node.scheduleBuffer(pool.buffer, at: nil, options: [], completionHandler: nil)
+        node.play()
     }
 }
