@@ -136,4 +136,24 @@ enum GameConstants {
     struct VisualFX {
         static let alienEyeGlowEnabled: Bool = false
     }
+
+    // MARK: - Performance Tuning
+    struct Performance {
+        // Feature flag: manual broadphase/narrowphase for player bullet hits (enemy + UFO).
+        static let manualPlayerBulletCollision: Bool = true
+        // Spread-shot bullets are spawned a few milliseconds apart to avoid contact bursts.
+        static let spreadShotStagger: TimeInterval = 0.018
+        // Y-axis band size for manual player-bullet broadphase.
+        static let manualCollisionBandHeight: CGFloat = 72.0
+        // Max queued player-bullet hit resolutions to process per frame.
+        static let manualResolutionMaxPerFrame: Int = 2
+        // Max time budget for manual player-bullet hit resolution work each frame.
+        static let manualResolutionBudgetMs: Double = 4.0
+        // When backlog exceeds this, use cheaper hit VFX to protect frame time.
+        static let manualResolutionLiteFxBacklog: Int = 4
+        // Prefer low-cost impact FX in manual collision mode to reduce resolve stalls.
+        static let manualResolutionPreferLiteFX: Bool = true
+        // Logs per-frame manual sweep outliers when exceeded.
+        static let manualSweepOutlierThresholdMs: Double = 10.0
+    }
 }

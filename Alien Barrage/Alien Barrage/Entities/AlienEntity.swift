@@ -82,7 +82,9 @@ class AlienEntity: GKEntity {
         // Physics body for collision detection
         let body = SKPhysicsBody(rectangleOf: type.size)
         body.categoryBitMask = GameConstants.PhysicsCategory.enemy
-        body.contactTestBitMask = GameConstants.PhysicsCategory.playerBullet
+        body.contactTestBitMask = GameConstants.Performance.manualPlayerBulletCollision
+            ? GameConstants.PhysicsCategory.none
+            : GameConstants.PhysicsCategory.playerBullet
         body.collisionBitMask = 0
         body.isDynamic = false
         body.affectedByGravity = false

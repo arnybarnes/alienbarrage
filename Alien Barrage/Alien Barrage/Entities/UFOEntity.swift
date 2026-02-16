@@ -40,7 +40,9 @@ class UFOEntity: GKEntity {
         // Physics body
         let body = SKPhysicsBody(rectangleOf: UFOEntity.ufoSize)
         body.categoryBitMask = GameConstants.PhysicsCategory.ufo
-        body.contactTestBitMask = GameConstants.PhysicsCategory.playerBullet
+        body.contactTestBitMask = GameConstants.Performance.manualPlayerBulletCollision
+            ? GameConstants.PhysicsCategory.none
+            : GameConstants.PhysicsCategory.playerBullet
         body.collisionBitMask = 0
         body.isDynamic = false
         body.affectedByGravity = false

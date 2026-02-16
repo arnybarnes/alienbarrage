@@ -74,6 +74,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Respawn state — pauses enemy attacks during glitch-in animation
     private var isRespawning: Bool = false
     private var lastShootSoundTime: Double = 0
+    private var transitionStallStartedAt: TimeInterval = 0
+    private var lastTransitionWatchdogLogAt: TimeInterval = 0
+
+    // Manual player bullet collision bookkeeping (enabled by feature flag).
+    private var trackedPlayerBullets: [ObjectIdentifier: SKSpriteNode] = [:]
+    private var playerBulletPreviousPositions: [ObjectIdentifier: CGPoint] = [:]
+    private var pendingManualHits: [PendingManualHit] = []
 
     // Bonus round — disables formation combat mechanics
     private var bonusRoundActive: Bool = false
@@ -100,6 +107,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         #if DEBUG
         PerformanceLog.enabled = true
         PerformanceLog.sessionStart()
+        PerformanceLog.event(
+            "PerfConfig",
+            "manualPB=\(GameConstants.Performance.manualPlayerBulletCollision) spreadStagger=\(GameConstants.Performance.spreadShotStagger) bandH=\(GameConstants.Performance.manualCollisionBandHeight) resolveCap=\(GameConstants.Performance.manualResolutionMaxPerFrame) budgetMs=\(GameConstants.Performance.manualResolutionBudgetMs) liteFxBacklog=\(GameConstants.Performance.manualResolutionLiteFxBacklog) preferLiteFx=\(GameConstants.Performance.manualResolutionPreferLiteFX) outlierMs=\(GameConstants.Performance.manualSweepOutlierThresholdMs)"
+        )
         #endif
 
         ExplosionEffect.warmUp()
@@ -145,27 +156,30 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Pause on background
         NotificationCenter.default.addObserver(
-            self, selector: #selector(appWillResignActive),
+            self, selector: #selector(appWillResignActive(_:)),
             name: UIApplication.willResignActiveNotification, object: nil
         )
         NotificationCenter.default.addObserver(
-            self, selector: #selector(appDidBecomeActive),
+            self, selector: #selector(appDidBecomeActive(_:)),
             name: UIApplication.didBecomeActiveNotification, object: nil
         )
     }
 
     override func willMove(from view: SKView) {
         super.willMove(from: view)
+        NotificationCenter.default.removeObserver(self)
         PerformanceLog.sessionEnd(finalLevel: currentLevel, score: scoreManager.currentScore)
     }
 
-    @objc private func appWillResignActive() {
+    @objc private func appWillResignActive(_ notification: Notification) {
+        PerformanceLog.event("AppState", "willResign gameState=\(gameState) paused=\(isPaused)")
         if gameState == .playing {
             isPaused = true
         }
     }
 
-    @objc private func appDidBecomeActive() {
+    @objc private func appDidBecomeActive(_ notification: Notification) {
+        PerformanceLog.event("AppState", "didBecomeActive gameState=\(gameState) paused=\(isPaused)")
         isPaused = false
     }
 
@@ -258,33 +272,80 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         let playerPos = playerEntity.spriteComponent.node.position
         let baseY = playerPos.y + PlayerEntity.shipSize.height / 2 + 5
+        let bulletPos = CGPoint(x: playerPos.x, y: baseY)
 
         if playerEntity.activePowerups.contains(.spreadShot) {
             // Fire 3 bullets in a fan pattern
             let angles: [CGFloat] = [-0.25, 0, 0.25]  // ~14 degrees
-            for angle in angles {
-                let bulletPos = CGPoint(x: playerPos.x, y: baseY)
-                let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
-                let node = bullet.spriteComponent.node
+            for (index, angle) in angles.enumerated() {
+                let delay = GameConstants.Performance.spreadShotStagger * Double(index)
+                spawnPlayerBullet(at: bulletPos, angle: angle, delay: delay)
+            }
+        } else {
+            spawnPlayerBullet(at: bulletPos, angle: 0, delay: 0)
+        }
+    }
 
-                // Replace the default straight-up action with angled movement
+    private func spawnPlayerBullet(at position: CGPoint, angle: CGFloat, delay: TimeInterval) {
+        let spawnBlock: () -> Void = { [weak self] in
+            guard let self else { return }
+            guard self.gameState == .playing || self.gameState == .levelTransition else { return }
+            guard !self.isRespawning else { return }
+
+            let bullet = ProjectileEntity(position: position, sceneHeight: self.size.height)
+            let node = bullet.spriteComponent.node
+
+            if angle != 0 {
+                // Replace the default straight-up action with angled movement.
                 node.removeAllActions()
-                let distance = size.height - bulletPos.y + ProjectileEntity.bulletSize.height
+                let distance = self.size.height - position.y + ProjectileEntity.bulletSize.height
                 let duration = TimeInterval(distance / GameConstants.playerBulletSpeed)
                 let dx = sin(angle) * distance
                 let move = SKAction.moveBy(x: dx, y: distance, duration: duration)
                 let remove = SKAction.removeFromParent()
                 node.run(SKAction.sequence([move, remove]))
-
-                worldNode.addChild(node)
-                entities.append(bullet)
             }
-        } else {
-            let bulletPos = CGPoint(x: playerPos.x, y: baseY)
-            let bullet = ProjectileEntity(position: bulletPos, sceneHeight: size.height)
-            worldNode.addChild(bullet.spriteComponent.node)
-            entities.append(bullet)
+
+            self.worldNode.addChild(node)
+            self.entities.append(bullet)
+            self.trackPlayerBullet(node)
         }
+
+        if delay > 0 {
+            let spawnAction = SKAction.run { spawnBlock() }
+            run(SKAction.sequence([SKAction.wait(forDuration: delay), spawnAction]))
+        } else {
+            spawnBlock()
+        }
+    }
+
+    private func trackPlayerBullet(_ node: SKSpriteNode) {
+        guard GameConstants.Performance.manualPlayerBulletCollision else { return }
+        let id = ObjectIdentifier(node)
+        trackedPlayerBullets[id] = node
+        playerBulletPreviousPositions[id] = node.position
+    }
+
+    private func untrackPlayerBullet(_ node: SKSpriteNode) {
+        let id = ObjectIdentifier(node)
+        trackedPlayerBullets.removeValue(forKey: id)
+        playerBulletPreviousPositions.removeValue(forKey: id)
+    }
+
+    private func removePlayerBullet(_ node: SKNode?) {
+        guard let node else { return }
+        if let sprite = node as? SKSpriteNode {
+            untrackPlayerBullet(sprite)
+            sprite.removeFromParent()
+            return
+        }
+        node.removeFromParent()
+    }
+
+    private func clearTrackedPlayerBullets() {
+        trackedPlayerBullets.removeAll(keepingCapacity: true)
+        playerBulletPreviousPositions.removeAll(keepingCapacity: true)
+        clearPendingManualHits()
     }
 
     // MARK: - Enemy Shooting
@@ -449,25 +510,34 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Bonus Round
 
     private func startBonusRound() {
+        for i in 0..<5 { removeAction(forKey: "bonusWave\(i)") }
+        removeAction(forKey: "levelStart")
+        removeAction(forKey: "waitForClear")
+        removeAction(forKey: "waitForClearTimeout")
+
         bonusAliensTotal = 40
         bonusAliensResolved = 0
         bonusRoundHits = 0
 
         let round = (currentLevel / 4) - 1
         bonusWavePatterns = BonusPatterns.patterns(forBonusRound: round, screenSize: size)
+        PerformanceLog.event("BonusFlow", "startBonusRound level=\(currentLevel) round=\(round) patterns=\(bonusWavePatterns.count)")
 
         for wave in 0..<5 {
             let delay = TimeInterval(wave) * 2.0
             run(SKAction.sequence([
                 SKAction.wait(forDuration: delay),
                 SKAction.run { [weak self] in
-                    self?.spawnBonusWave(wave)
+                    guard let self else { return }
+                    PerformanceLog.event("BonusFlow", "spawnWave wave=\(wave) resolved=\(self.bonusAliensResolved)/\(self.bonusAliensTotal)")
+                    self.spawnBonusWave(wave)
                 }
             ]), withKey: "bonusWave\(wave)")
         }
     }
 
     private func spawnBonusWave(_ waveIndex: Int) {
+        PerformanceLog.event("BonusFlow", "spawnBonusWave wave=\(waveIndex) patterns=\(bonusWavePatterns.count)")
         for i in 0..<8 {
             let delay = TimeInterval(i) * 0.15
             run(SKAction.sequence([
@@ -481,6 +551,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func spawnBonusAlien(wave: Int, index: Int) {
         PerformanceLog.event("BonusSpawn", "wave=\(wave) index=\(index)")
+        guard wave >= 0, wave < bonusWavePatterns.count else {
+            PerformanceLog.error("BonusFlow: waveIndexOutOfRange wave=\(wave) patterns=\(bonusWavePatterns.count) level=\(currentLevel)")
+            return
+        }
         let alien = AlienEntity(type: .small, row: 0, col: wave)
         alien.isSwooping = true  // use swooping cleanup path in collision handler
 
@@ -535,6 +609,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               bonusAliensTotal > 0,
               bonusAliensResolved >= bonusAliensTotal else { return }
 
+        PerformanceLog.event(
+            "BonusFlow",
+            "complete hits=\(bonusRoundHits) resolved=\(bonusAliensResolved)/\(bonusAliensTotal) level=\(currentLevel)"
+        )
+
         PerformanceLog.levelComplete(level: currentLevel, isBonus: true, aliveAliens: 0, fireInterval: currentEnemyFireInterval)
 
         gameState = .levelTransition
@@ -542,19 +621,23 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Remove remaining player bullets
         worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
+            self.removePlayerBullet(node)
         }
+        clearTrackedPlayerBullets()
 
         // Short pause before showing results
         run(SKAction.sequence([
             SKAction.wait(forDuration: 0.8),
             SKAction.run { [weak self] in
-                self?.showBonusResults()
+                guard let self else { return }
+                PerformanceLog.event("BonusFlow", "invokeShowResults level=\(self.currentLevel)")
+                self.showBonusResults()
             }
         ]))
     }
 
     private func showBonusResults() {
+        PerformanceLog.event("BonusFlow", "showResults level=\(currentLevel) hits=\(bonusRoundHits)/\(bonusAliensTotal)")
         let isPerfect = bonusRoundHits >= bonusAliensTotal
         let bonus = isPerfect ? GameConstants.bonusRoundPerfectBonus : bonusRoundHits * GameConstants.bonusRoundKillScore
 
@@ -644,10 +727,17 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
         // Dismiss after 3.5 seconds, then proceed to next level
         currentLevel += 1
+        let hadLevelStart = action(forKey: "levelStart") != nil
+        PerformanceLog.event(
+            "BonusFlow",
+            "scheduleLevelStart delay=3.5 level=\(currentLevel) existingLevelStart=\(hadLevelStart) scenePaused=\(isPaused) worldPaused=\(worldNode.isPaused)"
+        )
         run(SKAction.sequence([
             SKAction.wait(forDuration: 3.5),
             SKAction.run { [weak self] in
-                self?.startNextLevel()
+                guard let self else { return }
+                PerformanceLog.event("BonusFlow", "startNextLevel fromBonus level=\(self.currentLevel)")
+                self.startNextLevel()
             }
         ]), withKey: "levelStart")
     }
@@ -700,6 +790,373 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
     }
 
+    private struct ManualAlienTarget {
+        let node: SKSpriteNode
+        let rect: CGRect
+        let centerY: CGFloat
+        let alien: AlienEntity
+        let isSwooper: Bool
+    }
+
+    private struct PendingManualHit {
+        enum Target {
+            case alien(alien: AlienEntity, node: SKSpriteNode, isSwooper: Bool)
+            case ufo(ufo: UFOEntity, node: SKSpriteNode)
+        }
+        let target: Target
+    }
+
+    private struct ManualDetectionStats {
+        let bullets: Int
+        let targets: Int
+        let candidateRefs: Int
+        let overlapChecks: Int
+        let queuedHits: Int
+        let detectMs: Double
+    }
+
+    private struct ManualResolutionStats {
+        let resolvedHits: Int
+        let reducedFXHits: Int
+        let queueDepth: Int
+        let resolveMs: Double
+    }
+
+    private func runManualPlayerBulletCollisions() {
+        guard GameConstants.Performance.manualPlayerBulletCollision else { return }
+        guard gameState == .playing || gameState == .levelTransition else {
+            clearPendingManualHits()
+            return
+        }
+
+        let detect = detectManualPlayerBulletCollisions()
+        let resolve = processPendingManualHitResolutions()
+        let totalMs = detect.detectMs + resolve.resolveMs
+
+        PerformanceLog.manualBulletSweep(
+            bullets: detect.bullets,
+            targets: detect.targets,
+            candidateRefs: detect.candidateRefs,
+            overlapChecks: detect.overlapChecks,
+            queuedHits: detect.queuedHits,
+            resolvedHits: resolve.resolvedHits,
+            reducedFXHits: resolve.reducedFXHits,
+            queueDepth: resolve.queueDepth,
+            detectMs: detect.detectMs,
+            resolveMs: resolve.resolveMs,
+            durationMs: totalMs
+        )
+    }
+
+    private func detectManualPlayerBulletCollisions() -> ManualDetectionStats {
+        // Drop stale nodes that were removed by actions/cleanup.
+        for (id, node) in trackedPlayerBullets where node.parent == nil {
+            trackedPlayerBullets.removeValue(forKey: id)
+            playerBulletPreviousPositions.removeValue(forKey: id)
+        }
+
+        let detectStart = CACurrentMediaTime()
+        guard !trackedPlayerBullets.isEmpty else {
+            return ManualDetectionStats(
+                bullets: 0,
+                targets: 0,
+                candidateRefs: 0,
+                overlapChecks: 0,
+                queuedHits: 0,
+                detectMs: (CACurrentMediaTime() - detectStart) * 1000
+            )
+        }
+
+        var overlapChecks = 0
+        var queuedHits = 0
+        var candidateRefs = 0
+        let bullets = Array(trackedPlayerBullets.values)
+        let bandHeight = max(24, GameConstants.Performance.manualCollisionBandHeight)
+
+        let swooperTargets = buildSwooperTargets()
+        let formationTargets = buildFormationTargets()
+        let swooperBands = buildBands(for: swooperTargets, bandHeight: bandHeight)
+        let formationBands = buildBands(for: formationTargets, bandHeight: bandHeight)
+        let targets = formationTargets.count + swooperTargets.count + (ufoEntity == nil ? 0 : 1)
+
+        for bulletNode in bullets {
+            guard bulletNode.parent != nil else {
+                untrackPlayerBullet(bulletNode)
+                continue
+            }
+
+            let bulletID = ObjectIdentifier(bulletNode)
+            let previous = playerBulletPreviousPositions[bulletID] ?? bulletNode.position
+            let current = bulletNode.position
+            let sweepRect = sweptRect(from: previous, to: current, size: bulletNode.frame.size)
+
+            if let ufo = ufoEntity, ufo.spriteComponent.node.parent != nil {
+                overlapChecks += 1
+                if sweepRect.intersects(worldRect(for: ufo.spriteComponent.node)) {
+                    queueManualHit(.ufo(ufo: ufo, node: ufo.spriteComponent.node))
+                    removePlayerBullet(bulletNode)
+                    queuedHits += 1
+                    continue
+                }
+            }
+
+            let swooperCandidateIndices = candidateIndices(
+                for: sweepRect,
+                bands: swooperBands,
+                bandHeight: bandHeight
+            )
+            candidateRefs += swooperCandidateIndices.count
+            if let swooperTarget = firstIntersectingTarget(
+                in: swooperTargets,
+                candidateIndices: swooperCandidateIndices,
+                sweepRect: sweepRect,
+                bulletY: current.y,
+                overlapChecks: &overlapChecks
+            ) {
+                queueManualHit(.alien(alien: swooperTarget.alien, node: swooperTarget.node, isSwooper: true))
+                removePlayerBullet(bulletNode)
+                queuedHits += 1
+                continue
+            }
+
+            let formationCandidateIndices = candidateIndices(
+                for: sweepRect,
+                bands: formationBands,
+                bandHeight: bandHeight
+            )
+            candidateRefs += formationCandidateIndices.count
+            if let formationTarget = firstIntersectingTarget(
+                in: formationTargets,
+                candidateIndices: formationCandidateIndices,
+                sweepRect: sweepRect,
+                bulletY: current.y,
+                overlapChecks: &overlapChecks
+            ) {
+                queueManualHit(.alien(alien: formationTarget.alien, node: formationTarget.node, isSwooper: false))
+                removePlayerBullet(bulletNode)
+                queuedHits += 1
+                continue
+            }
+
+            playerBulletPreviousPositions[bulletID] = current
+        }
+
+        let detectMs = (CACurrentMediaTime() - detectStart) * 1000
+        return ManualDetectionStats(
+            bullets: bullets.count,
+            targets: targets,
+            candidateRefs: candidateRefs,
+            overlapChecks: overlapChecks,
+            queuedHits: queuedHits,
+            detectMs: detectMs
+        )
+    }
+
+    private func processPendingManualHitResolutions() -> ManualResolutionStats {
+        let resolveStart = CACurrentMediaTime()
+        guard !pendingManualHits.isEmpty else {
+            return ManualResolutionStats(resolvedHits: 0, reducedFXHits: 0, queueDepth: 0, resolveMs: 0)
+        }
+
+        let maxPerFrame = max(1, GameConstants.Performance.manualResolutionMaxPerFrame)
+        let budgetMs = max(0.5, GameConstants.Performance.manualResolutionBudgetMs)
+
+        var resolvedHits = 0
+        var reducedFXHits = 0
+
+        while !pendingManualHits.isEmpty {
+            if resolvedHits >= maxPerFrame { break }
+            let elapsedMs = (CACurrentMediaTime() - resolveStart) * 1000
+            if elapsedMs >= budgetMs { break }
+
+            let pending = pendingManualHits.removeFirst()
+
+            let backlogAfterCurrent = pendingManualHits.count
+            let preferLiteFX = GameConstants.Performance.manualResolutionPreferLiteFX
+            let useReducedFX =
+                preferLiteFX ||
+                backlogAfterCurrent >= GameConstants.Performance.manualResolutionLiteFxBacklog ||
+                elapsedMs >= budgetMs * 0.75
+
+            switch pending.target {
+            case let .alien(alien, node, isSwooper):
+                guard alien.isAlive, node.parent != nil else { continue }
+                PerformanceLog.manualCollisionType(isSwooper ? "playerBullet-swooper" : "playerBullet-enemy")
+                resolvePlayerBulletHitsEnemy(alienNode: node, alienEntity: alien, reducedFX: useReducedFX)
+                resolvedHits += 1
+                if useReducedFX { reducedFXHits += 1 }
+
+            case let .ufo(ufo, node):
+                guard ufoEntity === ufo, node.parent != nil else { continue }
+                PerformanceLog.manualCollisionType("playerBullet-ufo")
+                resolvePlayerBulletHitsUFO(ufoNode: node, ufo: ufo, reducedFX: useReducedFX)
+                resolvedHits += 1
+                if useReducedFX { reducedFXHits += 1 }
+            }
+        }
+
+        let resolveMs = (CACurrentMediaTime() - resolveStart) * 1000
+        return ManualResolutionStats(
+            resolvedHits: resolvedHits,
+            reducedFXHits: reducedFXHits,
+            queueDepth: pendingManualHits.count,
+            resolveMs: resolveMs
+        )
+    }
+
+    private func queueManualHit(_ target: PendingManualHit.Target) {
+        pendingManualHits.append(PendingManualHit(target: target))
+    }
+
+    private func clearPendingManualHits() {
+        pendingManualHits.removeAll(keepingCapacity: true)
+    }
+
+    private func buildSwooperTargets() -> [ManualAlienTarget] {
+        var targets: [ManualAlienTarget] = []
+        for entity in entities {
+            guard let alien = entity as? AlienEntity,
+                  alien.isAlive,
+                  alien.isSwooping else { continue }
+            let node = alien.spriteComponent.node
+            guard node.parent != nil else { continue }
+
+            let rect = worldRect(for: node)
+            targets.append(ManualAlienTarget(node: node, rect: rect, centerY: node.position.y, alien: alien, isSwooper: true))
+        }
+        return targets
+    }
+
+    private func buildFormationTargets() -> [ManualAlienTarget] {
+        guard let formation = alienFormation else { return [] }
+        var targets: [ManualAlienTarget] = []
+
+        for row in formation.aliens {
+            for alien in row {
+                guard let alien, alien.isAlive, !alien.isSwooping else { continue }
+                let node = alien.spriteComponent.node
+                guard node.parent != nil else { continue }
+
+                let rect = worldRect(for: alien, in: formation)
+                let centerY = rect.midY
+                targets.append(ManualAlienTarget(node: node, rect: rect, centerY: centerY, alien: alien, isSwooper: false))
+            }
+        }
+        return targets
+    }
+
+    private func buildBands(
+        for targets: [ManualAlienTarget],
+        bandHeight: CGFloat
+    ) -> [Int: [Int]] {
+        var bands: [Int: [Int]] = [:]
+        for (index, target) in targets.enumerated() {
+            let minBand = bandIndex(forY: target.rect.minY, bandHeight: bandHeight)
+            let maxBand = bandIndex(forY: target.rect.maxY, bandHeight: bandHeight)
+            if minBand <= maxBand {
+                for band in minBand...maxBand {
+                    bands[band, default: []].append(index)
+                }
+            }
+        }
+        return bands
+    }
+
+    private func candidateIndices(
+        for sweepRect: CGRect,
+        bands: [Int: [Int]],
+        bandHeight: CGFloat
+    ) -> [Int] {
+        let minBand = bandIndex(forY: sweepRect.minY, bandHeight: bandHeight)
+        let maxBand = bandIndex(forY: sweepRect.maxY, bandHeight: bandHeight)
+        guard minBand <= maxBand else { return [] }
+
+        var seen = Set<Int>()
+        var indices: [Int] = []
+        for band in minBand...maxBand {
+            guard let bandIndices = bands[band] else { continue }
+            for index in bandIndices where seen.insert(index).inserted {
+                indices.append(index)
+            }
+        }
+        return indices
+    }
+
+    private func firstIntersectingTarget(
+        in targets: [ManualAlienTarget],
+        candidateIndices: [Int],
+        sweepRect: CGRect,
+        bulletY: CGFloat,
+        overlapChecks: inout Int
+    ) -> ManualAlienTarget? {
+        var best: (target: ManualAlienTarget, distance: CGFloat)?
+
+        for index in candidateIndices {
+            guard index >= 0, index < targets.count else { continue }
+            let target = targets[index]
+            guard target.alien.isAlive, target.node.parent != nil else { continue }
+
+            overlapChecks += 1
+            guard sweepRect.intersects(target.rect) else { continue }
+
+            let distance = abs(target.centerY - bulletY)
+            if let existing = best {
+                if distance < existing.distance {
+                    best = (target, distance)
+                }
+            } else {
+                best = (target, distance)
+            }
+        }
+
+        if let best {
+            return best.target
+        }
+        return nil
+    }
+
+    private func bandIndex(forY y: CGFloat, bandHeight: CGFloat) -> Int {
+        Int(floor(y / bandHeight))
+    }
+
+    private func sweptRect(from start: CGPoint, to end: CGPoint, size: CGSize) -> CGRect {
+        let width = max(1, size.width)
+        let height = max(1, size.height)
+        let minX = min(start.x, end.x) - width / 2
+        let minY = min(start.y, end.y) - height / 2
+        let maxX = max(start.x, end.x) + width / 2
+        let maxY = max(start.y, end.y) + height / 2
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
+    }
+
+    private func worldRect(for node: SKSpriteNode) -> CGRect {
+        let size = CGSize(
+            width: node.size.width * abs(node.xScale),
+            height: node.size.height * abs(node.yScale)
+        )
+        return CGRect(
+            x: node.position.x - size.width / 2,
+            y: node.position.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func worldRect(for alien: AlienEntity, in formation: AlienFormation) -> CGRect {
+        let node = alien.spriteComponent.node
+        let worldPos = formation.formationNode.convert(node.position, to: worldNode)
+        let size = CGSize(
+            width: alien.alienType.size.width * abs(node.xScale),
+            height: alien.alienType.size.height * abs(node.yScale)
+        )
+        return CGRect(
+            x: worldPos.x - size.width / 2,
+            y: worldPos.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
     // MARK: - Physics Contact
 
     func didBegin(_ contact: SKPhysicsContact) {
@@ -710,36 +1167,42 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let maskA = bodyA.categoryBitMask
         let maskB = bodyB.categoryBitMask
 
-        // Player bullet hits enemy
-        if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.enemy) ||
-           (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.enemy) {
-            let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
-            let alienBody = maskA == GameConstants.PhysicsCategory.enemy ? bodyA : bodyB
-            handlePlayerBulletHitsEnemy(bulletBody: bulletBody, alienBody: alienBody)
-            return
+        if !GameConstants.Performance.manualPlayerBulletCollision {
+            // Player bullet hits enemy
+            if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.enemy) ||
+               (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.enemy) {
+                PerformanceLog.contactType("playerBullet-enemy")
+                let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
+                let alienBody = maskA == GameConstants.PhysicsCategory.enemy ? bodyA : bodyB
+                handlePlayerBulletHitsEnemy(bulletBody: bulletBody, alienBody: alienBody)
+                return
+            }
+
+            // Player bullet hits UFO
+            if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.ufo) ||
+               (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.ufo) {
+                PerformanceLog.contactType("playerBullet-ufo")
+                let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
+                let ufoBody = maskA == GameConstants.PhysicsCategory.ufo ? bodyA : bodyB
+                handlePlayerBulletHitsUFO(bulletBody: bulletBody, ufoBody: ufoBody)
+                return
+            }
         }
 
         // Enemy bullet hits player
         if (maskA == GameConstants.PhysicsCategory.enemyBullet && maskB == GameConstants.PhysicsCategory.player) ||
            (maskB == GameConstants.PhysicsCategory.enemyBullet && maskA == GameConstants.PhysicsCategory.player) {
+            PerformanceLog.contactType("enemyBullet-player")
             let bulletBody = maskA == GameConstants.PhysicsCategory.enemyBullet ? bodyA : bodyB
             let playerBody = maskA == GameConstants.PhysicsCategory.player ? bodyA : bodyB
             handleEnemyBulletHitsPlayer(bulletBody: bulletBody, playerBody: playerBody)
             return
         }
 
-        // Player bullet hits UFO
-        if (maskA == GameConstants.PhysicsCategory.playerBullet && maskB == GameConstants.PhysicsCategory.ufo) ||
-           (maskB == GameConstants.PhysicsCategory.playerBullet && maskA == GameConstants.PhysicsCategory.ufo) {
-            let bulletBody = maskA == GameConstants.PhysicsCategory.playerBullet ? bodyA : bodyB
-            let ufoBody = maskA == GameConstants.PhysicsCategory.ufo ? bodyA : bodyB
-            handlePlayerBulletHitsUFO(bulletBody: bulletBody, ufoBody: ufoBody)
-            return
-        }
-
         // Player collects powerup
         if (maskA == GameConstants.PhysicsCategory.player && maskB == GameConstants.PhysicsCategory.powerup) ||
            (maskB == GameConstants.PhysicsCategory.player && maskA == GameConstants.PhysicsCategory.powerup) {
+            PerformanceLog.contactType("player-powerup")
             let powerupBody = maskA == GameConstants.PhysicsCategory.powerup ? bodyA : bodyB
             handlePlayerCollectsPowerup(powerupBody: powerupBody)
             return
@@ -748,6 +1211,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Swooping alien hits player
         if (maskA == GameConstants.PhysicsCategory.enemy && maskB == GameConstants.PhysicsCategory.player) ||
            (maskB == GameConstants.PhysicsCategory.enemy && maskA == GameConstants.PhysicsCategory.player) {
+            PerformanceLog.contactType("enemy-player")
             let alienBody = maskA == GameConstants.PhysicsCategory.enemy ? bodyA : bodyB
             handleSwooperHitsPlayer(alienBody: alienBody)
             return
@@ -758,13 +1222,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Collision Handlers
 
     private func handlePlayerBulletHitsEnemy(bulletBody: SKPhysicsBody, alienBody: SKPhysicsBody) {
-        guard gameState == .playing else { return }
         guard let bulletNode = bulletBody.node as? SKSpriteNode,
               let alienNode = alienBody.node as? SKSpriteNode else { return }
-
         guard let alienEntity = alienNode.userData?["entity"] as? AlienEntity else { return }
+        handlePlayerBulletHitsEnemy(bulletNode: bulletNode, alienNode: alienNode, alienEntity: alienEntity)
+    }
 
-        // Spark effect at impact — swooping aliens are already in world coords
+    private func handlePlayerBulletHitsEnemy(
+        bulletNode: SKSpriteNode,
+        alienNode: SKSpriteNode,
+        alienEntity: AlienEntity
+    ) {
+        guard gameState == .playing else { return }
+        resolvePlayerBulletHitsEnemy(alienNode: alienNode, alienEntity: alienEntity, reducedFX: false)
+        removePlayerBullet(bulletNode)
+    }
+
+    private func resolvePlayerBulletHitsEnemy(
+        alienNode: SKSpriteNode,
+        alienEntity: AlienEntity,
+        reducedFX: Bool
+    ) {
+        guard gameState == .playing || gameState == .levelTransition else { return }
+        // Spark effect at impact — swooping aliens are already in world coords.
         let impactPos: CGPoint
         if alienEntity.isSwooping {
             impactPos = alienNode.position
@@ -774,18 +1254,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             impactPos = alienNode.position
         }
 
-        // All aliens die in one hit
+        // All aliens die in one hit.
         let isDead = alienEntity.healthComponent.takeDamage(alienEntity.healthComponent.currentHP)
-        ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene!)
+        if !reducedFX {
+            ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene ?? self)
+        }
 
         if isDead {
             AudioManager.shared.play(GameConstants.Sound.enemyDeath)
             if GameConstants.Haptic.alienKilled { HapticManager.shared.mediumImpact() }
 
             if alienEntity.isSwooping {
-                // Swooper: clean up directly (already removed from grid)
+                // Swooper: clean up directly (already removed from grid).
                 let scoreValue = bonusRoundActive ? GameConstants.bonusRoundKillScore : alienEntity.scoreValueComponent.value
-                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
+                let scaledScore = scoreManager.scaledValue(scoreValue)
+                if reducedFX {
+                    ExplosionEffect.spawnScorePopup(at: impactPos, in: self, scoreValue: scaledScore)
+                } else {
+                    ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scaledScore)
+                }
                 scoreManager.addPoints(scoreValue)
 
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
@@ -809,21 +1296,24 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
 
                 let scoreValue = alienEntity.scoreValueComponent.value
-                ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
+                let scaledScore = scoreManager.scaledValue(scoreValue)
+                if reducedFX {
+                    ExplosionEffect.spawnScorePopup(at: impactPos, in: self, scoreValue: scaledScore)
+                } else {
+                    ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scaledScore)
+                }
                 scoreManager.addPoints(scoreValue)
 
-                // Chance to drop powerup (disabled in bonus rounds)
+                // Chance to drop powerup (disabled in bonus rounds).
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     spawnPowerup(at: impactPos)
                 }
             }
-        } else {
+        } else if !reducedFX {
             let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
             let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
             alienNode.run(SKAction.sequence([colorize, restore]))
         }
-
-        bulletNode.removeFromParent()
     }
 
     private func handleEnemyBulletHitsPlayer(bulletBody: SKPhysicsBody, playerBody: SKPhysicsBody) {
@@ -863,14 +1353,32 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func handlePlayerBulletHitsUFO(bulletBody: SKPhysicsBody, ufoBody: SKPhysicsBody) {
-        guard gameState == .playing || gameState == .levelTransition else { return }
         guard let bulletNode = bulletBody.node as? SKSpriteNode,
               let ufoNode = ufoBody.node as? SKSpriteNode else { return }
-
         guard let ufo = ufoNode.userData?["entity"] as? UFOEntity else { return }
+        handlePlayerBulletHitsUFO(bulletNode: bulletNode, ufoNode: ufoNode, ufo: ufo)
+    }
 
-        // Spark effect
-        ParticleEffects.spawnSparkBurst(at: ufoNode.position, in: self)
+    private func handlePlayerBulletHitsUFO(
+        bulletNode: SKSpriteNode,
+        ufoNode: SKSpriteNode,
+        ufo: UFOEntity
+    ) {
+        guard gameState == .playing || gameState == .levelTransition else { return }
+        resolvePlayerBulletHitsUFO(ufoNode: ufoNode, ufo: ufo, reducedFX: false)
+        removePlayerBullet(bulletNode)
+    }
+
+    private func resolvePlayerBulletHitsUFO(
+        ufoNode: SKSpriteNode,
+        ufo: UFOEntity,
+        reducedFX: Bool
+    ) {
+        guard gameState == .playing || gameState == .levelTransition else { return }
+        // Spark effect.
+        if !reducedFX {
+            ParticleEffects.spawnSparkBurst(at: ufoNode.position, in: self)
+        }
 
         let isDead = ufo.healthComponent.takeDamage(1)
 
@@ -880,19 +1388,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             let worldPos = ufoNode.position
             let scoreValue = ufo.scoreValueComponent.value
-            ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scoreManager.scaledValue(scoreValue))
+            let scaledScore = scoreManager.scaledValue(scoreValue)
+            if reducedFX {
+                ExplosionEffect.spawnScorePopup(at: worldPos, in: self, scoreValue: scaledScore)
+            } else {
+                ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scaledScore)
+            }
             scoreManager.addPoints(scoreValue)
             ufoNode.removeFromParent()
             ufoEntity = nil
-        } else {
+        } else if !reducedFX {
             let blink = SKAction.sequence([
                 SKAction.fadeAlpha(to: 0.2, duration: 0.05),
                 SKAction.fadeAlpha(to: 1.0, duration: 0.1)
             ])
             ufoNode.run(blink)
         }
-
-        bulletNode.removeFromParent()
     }
 
     private func handlePlayerCollectsPowerup(powerupBody: SKPhysicsBody) {
@@ -980,6 +1491,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         PerformanceLog.sessionEnd(finalLevel: currentLevel, score: scoreManager.currentScore)
 
         gameState = .gameOver
+        clearPendingManualHits()
         playerEntity.shootingComponent.isFiring = false
         playerEntity.clearAllPowerups()
         powerupIndicator.hide(type: .extraLife)
@@ -1095,8 +1607,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             node.removeFromParent()
         }
         worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
+            self.removePlayerBullet(node)
         }
+        clearTrackedPlayerBullets()
         worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
             node.removeFromParent()
         }
@@ -1218,8 +1731,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             node.removeFromParent()
         }
         worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-            node.removeFromParent()
+            self.removePlayerBullet(node)
         }
+        clearTrackedPlayerBullets()
         worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
             node.removeFromParent()
         }
@@ -1342,8 +1856,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                       self.action(forKey: "levelStart") == nil else { return }
                 self.removeAction(forKey: "waitForClear")
                 worldNode.enumerateChildNodes(withName: "playerBullet") { node, _ in
-                    node.removeFromParent()
+                    self.removePlayerBullet(node)
                 }
+                self.clearTrackedPlayerBullets()
                 worldNode.enumerateChildNodes(withName: "powerup") { node, _ in
                     node.removeFromParent()
                 }
@@ -1417,6 +1932,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func startNextLevel() {
+        let hasLevelStartAction = action(forKey: "levelStart") != nil
+        PerformanceLog.event(
+            "LevelFlow",
+            "startNextLevel level=\(currentLevel) bonusActive=\(bonusRoundActive) overlay=\(overlayNode != nil) hasLevelStart=\(hasLevelStartAction) scenePaused=\(isPaused) worldPaused=\(worldNode.isPaused)"
+        )
         if GameConstants.Haptic.levelComplete { HapticManager.shared.success() }
 
         // Remove overlay
@@ -1591,6 +2111,41 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         return container
     }
 
+    private func monitorTransitionWatchdog(currentTime: TimeInterval) {
+        guard gameState == .levelTransition else {
+            transitionStallStartedAt = 0
+            lastTransitionWatchdogLogAt = 0
+            return
+        }
+
+        let hasOverlay = overlayNode != nil
+        let hasLevelStart = action(forKey: "levelStart") != nil
+        let hasWaitForClear = action(forKey: "waitForClear") != nil
+        let hasWaitForClearTimeout = action(forKey: "waitForClearTimeout") != nil
+        let likelyStalled = hasOverlay && !hasLevelStart && !hasWaitForClear
+
+        guard likelyStalled else {
+            transitionStallStartedAt = 0
+            lastTransitionWatchdogLogAt = 0
+            return
+        }
+
+        if transitionStallStartedAt == 0 {
+            transitionStallStartedAt = currentTime
+        }
+
+        let stalledFor = currentTime - transitionStallStartedAt
+        let shouldLog = stalledFor >= 2.0 &&
+            (lastTransitionWatchdogLogAt == 0 || currentTime - lastTransitionWatchdogLogAt >= 2.0)
+        guard shouldLog else { return }
+
+        lastTransitionWatchdogLogAt = currentTime
+        PerformanceLog.event(
+            "TransitionWatchdog",
+            "stalledFor=\(String(format: "%.2f", stalledFor))s level=\(currentLevel) bonusActive=\(bonusRoundActive) overlay=\(hasOverlay) levelStart=\(hasLevelStart) waitForClear=\(hasWaitForClear) waitTimeout=\(hasWaitForClearTimeout) scenePaused=\(isPaused) worldPaused=\(worldNode.isPaused) pendingHits=\(pendingManualHits.count)"
+        )
+    }
+
     // MARK: - Update
 
     override func update(_ currentTime: TimeInterval) {
@@ -1612,6 +2167,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             // Track UFO removal (flew off-screen)
             if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
                 ufoEntity = nil
+            }
+
+            if GameConstants.Performance.manualPlayerBulletCollision {
+                PerformanceLog.begin("ManualPlayerBulletCollision")
+                runManualPlayerBulletCollisions()
+                PerformanceLog.end("ManualPlayerBulletCollision")
             }
         }
 
@@ -1696,6 +2257,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             swoopCount: swoopingAliens.count
         )
 
+        monitorTransitionWatchdog(currentTime: currentTime)
         lastUpdateTime = currentTime
     }
 }

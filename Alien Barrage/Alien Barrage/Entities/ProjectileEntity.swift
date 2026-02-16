@@ -33,14 +33,18 @@ class ProjectileEntity: GKEntity {
         node.userData = NSMutableDictionary()
         node.userData?["entity"] = self
 
-        // Physics body for collision detection
-        let body = SKPhysicsBody(rectangleOf: ProjectileEntity.bulletSize)
-        body.categoryBitMask = GameConstants.PhysicsCategory.playerBullet
-        body.contactTestBitMask = GameConstants.PhysicsCategory.enemy | GameConstants.PhysicsCategory.ufo
-        body.collisionBitMask = 0
-        body.isDynamic = true
-        body.affectedByGravity = false
-        node.physicsBody = body
+        // Physics body for collision detection (or disabled when using manual bullet collisions).
+        if GameConstants.Performance.manualPlayerBulletCollision {
+            node.physicsBody = nil
+        } else {
+            let body = SKPhysicsBody(rectangleOf: ProjectileEntity.bulletSize)
+            body.categoryBitMask = GameConstants.PhysicsCategory.playerBullet
+            body.contactTestBitMask = GameConstants.PhysicsCategory.enemy | GameConstants.PhysicsCategory.ufo
+            body.collisionBitMask = 0
+            body.isDynamic = true
+            body.affectedByGravity = false
+            node.physicsBody = body
+        }
 
         // Move upward and remove when off-screen (speed scales with screen height)
         let distance = sceneHeight - position.y + ProjectileEntity.bulletSize.height
