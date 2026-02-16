@@ -97,7 +97,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     override func didMove(to view: SKView) {
         #if DEBUG
         PerformanceLog.enabled = true
-        PerformanceLog.openLog()
+        PerformanceLog.sessionStart()
         #endif
 
         backgroundColor = .black
@@ -152,7 +152,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     override func willMove(from view: SKView) {
         super.willMove(from: view)
-        PerformanceLog.closeLog()
+        PerformanceLog.sessionEnd(finalLevel: currentLevel, score: scoreManager.currentScore)
     }
 
     @objc private func appWillResignActive() {
@@ -635,6 +635,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               bonusAliensTotal > 0,
               bonusAliensResolved >= bonusAliensTotal else { return }
 
+        PerformanceLog.levelComplete(level: currentLevel, isBonus: true, aliveAliens: 0, fireInterval: currentEnemyFireInterval)
+
         gameState = .levelTransition
         playerEntity.shootingComponent.isFiring = false
 
@@ -1073,6 +1075,10 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Player Death & Game Over
 
     private func handlePlayerDeath() {
+        // Log current level stats + session summary before game over
+        PerformanceLog.levelComplete(level: currentLevel, isBonus: bonusRoundActive, aliveAliens: alienFormation?.aliveCount ?? 0, fireInterval: currentEnemyFireInterval)
+        PerformanceLog.sessionEnd(finalLevel: currentLevel, score: scoreManager.currentScore)
+
         gameState = .gameOver
         playerEntity.shootingComponent.isFiring = false
         playerEntity.clearAllPowerups()
@@ -1374,6 +1380,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
               formation.aliveCount == 0,
               swoopingAliens.isEmpty,
               ufoEntity == nil else { return }
+
+        PerformanceLog.levelComplete(level: currentLevel, isBonus: false, aliveAliens: 0, fireInterval: currentEnemyFireInterval)
 
         gameState = .levelTransition
         currentLevel += 1
@@ -1779,17 +1787,13 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         PerformanceLog.end("EntityCleanup")
 
         PerformanceLog.end("FrameTotal")
-        PerformanceLog.frameSummary(
+        PerformanceLog.recordFrame(
             dt: dt,
             entityCount: entities.count,
             nodeCount: worldNode.children.count,
-            aliveAliens: alienFormation?.aliveCount ?? 0,
-            level: currentLevel,
-            fireInterval: currentEnemyFireInterval,
-            isBonus: bonusRoundActive,
-            swoopCount: swoopingAliens.count,
             spriteCount: worldNode.children.filter { $0 is SKSpriteNode }.count,
-            emitterCount: worldNode.children.filter { $0 is SKEmitterNode }.count
+            emitterCount: worldNode.children.filter { $0 is SKEmitterNode }.count,
+            swoopCount: swoopingAliens.count
         )
 
         lastUpdateTime = currentTime
