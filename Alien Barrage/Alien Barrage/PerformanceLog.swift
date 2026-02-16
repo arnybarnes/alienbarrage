@@ -3,9 +3,10 @@
 //  Alien Barrage
 //
 
+import Foundation
+
 #if DEBUG
 
-import Foundation
 import QuartzCore
 import os.log
 import os.signpost
