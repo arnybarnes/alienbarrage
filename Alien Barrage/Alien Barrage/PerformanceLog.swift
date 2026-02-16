@@ -33,6 +33,9 @@ enum PerformanceLog {
     private static var sessionPeakNodes = 0
     private static var sessionErrors: [String] = []
 
+    // File logging
+    private static var fileHandle: FileHandle?
+
     // MARK: - Signposts
 
     static func begin(_ name: StaticString) {
@@ -49,12 +52,12 @@ enum PerformanceLog {
 
     static func event(_ name: StaticString, _ message: String) {
         guard enabled else { return }
-        os_log("[Event] %{public}s", log: log, type: .info, message)
+        writeLine("[Event] \(message)")
     }
 
     static func error(_ message: String) {
         guard enabled else { return }
-        os_log("[ERROR] %{public}s", log: log, type: .error, message)
+        writeLine("[ERROR] \(message)")
         errorMessages.append(message)
         sessionErrors.append(message)
     }
@@ -91,7 +94,7 @@ enum PerformanceLog {
         let mode = isBonus ? "BONUS" : "Level"
 
         let msg = "\(mode) \(level) done | frames=\(frameCount) avg_dt=\(avgMs)ms max_dt=\(maxMs)ms | peak: entities=\(peakEntities) nodes=\(peakNodes) sprites=\(peakSprites) emitters=\(peakEmitters) swoop=\(peakSwoop) | fire=\(fire)s errors=\(errorMessages.count)"
-        os_log("[Perf] %{public}s", log: log, type: .info, msg)
+        writeLine(msg)
 
         // Track worst level for session summary
         if dtMax > worstLevelDt {
@@ -103,16 +106,17 @@ enum PerformanceLog {
         resetLevelStats()
     }
 
-    // MARK: - Session Summary
+    // MARK: - Session Lifecycle
 
     static func sessionStart() {
         guard enabled else { return }
+        openFile()
         resetLevelStats()
         worstLevel = 0
         worstLevelDt = 0
         sessionPeakNodes = 0
         sessionErrors.removeAll()
-        os_log("[Perf] Session started", log: log, type: .info)
+        writeLine("=== Session started \(Date()) ===")
     }
 
     static func sessionEnd(finalLevel: Int, score: Int) {
@@ -123,7 +127,27 @@ enum PerformanceLog {
             let unique = Array(Set(sessionErrors))
             msg += " [\(unique.joined(separator: "; "))]"
         }
-        os_log("[Perf] %{public}s", log: log, type: .info, msg)
+        writeLine(msg)
+        closeFile()
+    }
+
+    // MARK: - File I/O
+
+    private static func openFile() {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        let url = docs.appendingPathComponent("perf_log.txt")
+        FileManager.default.createFile(atPath: url.path, contents: nil)
+        fileHandle = try? FileHandle(forWritingTo: url)
+    }
+
+    private static func closeFile() {
+        fileHandle?.closeFile()
+        fileHandle = nil
+    }
+
+    private static func writeLine(_ line: String) {
+        guard let fh = fileHandle else { return }
+        fh.write((line + "\n").data(using: .utf8)!)
     }
 
     // MARK: - Private

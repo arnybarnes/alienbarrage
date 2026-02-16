@@ -75,28 +75,29 @@ One-shot events and errors are also logged via `os_log`:
 
 ### After a Play Session
 
-```bash
-# Collect recent logs from the connected device (adjust time window as needed)
-/usr/bin/log collect --device --last 10m --output /tmp/perf.logarchive
+Logs are written to `Documents/perf_log.txt` inside the app container on the device. Pull them with `devicectl`:
 
-# Show only Alien Barrage perf logs
-/usr/bin/log show /tmp/perf.logarchive \
-  --predicate 'subsystem == "com.alienbarrage"' \
-  --style compact
+```bash
+# Copy perf log from device to Mac
+xcrun devicectl device copy from \
+  --device ABFAA322-0B06-5777-A5F3-F4CEBC0F8F8F \
+  --source Documents/perf_log.txt \
+  --domain-type appDataContainer \
+  --domain-identifier com.biffna.retrostyle1 \
+  --destination /tmp/perf_log.txt
+
+# Read the log
+cat /tmp/perf_log.txt
 ```
+
+> **Note:** The device ID above is for "iPhone (8)" / iPhone 17 Pro Max. Find yours with `xcrun devicectl list devices`.
 
 ### Other Useful Queries
 
 ```bash
-# Errors only
-/usr/bin/log show /tmp/perf.logarchive \
-  --predicate 'subsystem == "com.alienbarrage" AND messageType == error' \
-  --style compact
-
-# Live streaming while playing (real-time)
-/usr/bin/log stream --device \
-  --predicate 'subsystem == "com.alienbarrage"' \
-  --style compact
+# os_log approach (requires sudo, use devicectl file copy instead)
+# sudo /usr/bin/log collect --device --last 10m --output /tmp/perf.logarchive
+# /usr/bin/log show /tmp/perf.logarchive --predicate 'subsystem == "com.alienbarrage"' --style compact
 
 # Longer session (30 minutes)
 /usr/bin/log collect --device --last 30m --output /tmp/perf.logarchive

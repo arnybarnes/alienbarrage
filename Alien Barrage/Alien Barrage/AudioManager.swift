@@ -2,7 +2,12 @@ import AVFoundation
 
 class AudioManager {
     static let shared = AudioManager()
-    private var players: [String: AVAudioPlayer] = [:]
+
+    /// Pool size per sound — allows overlapping playback
+    private static let poolSize = 3
+
+    /// Pre-loaded player pools keyed by sound name
+    private var pools: [String: [AVAudioPlayer]] = [:]
 
     /// All sound file constants for muteAll/unmuteAll
     static let allSoundFiles: [String] = [
@@ -30,6 +35,23 @@ class AudioManager {
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: "mutedSounds") ?? []
         mutedSounds = Set(saved)
+        preloadAll()
+    }
+
+    private func preloadAll() {
+        for soundName in Self.allSoundFiles where !soundName.isEmpty {
+            guard let url = Bundle.main.url(forResource: soundName, withExtension: nil) else { continue }
+            var pool: [AVAudioPlayer] = []
+            for _ in 0..<Self.poolSize {
+                if let player = try? AVAudioPlayer(contentsOf: url) {
+                    player.prepareToPlay()
+                    pool.append(player)
+                }
+            }
+            if !pool.isEmpty {
+                pools[soundName] = pool
+            }
+        }
     }
 
     private func saveMutedSounds() {
@@ -64,20 +86,23 @@ class AudioManager {
     func play(_ soundName: String) {
         guard !soundName.isEmpty else { return }
         guard !mutedSounds.contains(soundName) else { return }
-        guard let url = Bundle.main.url(forResource: soundName, withExtension: nil) else {
-            let msg = "AudioManager: file not found — \(soundName)"
+        guard let pool = pools[soundName] else {
+            let msg = "AudioManager: no pool for — \(soundName)"
             print(msg)
             PerformanceLog.error(msg)
             return
         }
-        do {
-            let player = try AVAudioPlayer(contentsOf: url)
+
+        // Find a player that isn't currently playing
+        if let player = pool.first(where: { !$0.isPlaying }) {
+            player.currentTime = 0
             player.play()
-            players[soundName] = player  // retain until playback finishes
-        } catch {
-            let msg = "AudioManager: failed to play \(soundName) — \(error)"
-            print(msg)
-            PerformanceLog.error(msg)
+            return
         }
+
+        // All busy — restart the first one (oldest playback)
+        let player = pool[0]
+        player.currentTime = 0
+        player.play()
     }
 }
