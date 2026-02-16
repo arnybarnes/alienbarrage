@@ -37,16 +37,18 @@ class UFOEntity: GKEntity {
         node.userData = NSMutableDictionary()
         node.userData?["entity"] = self
 
-        // Physics body
-        let body = SKPhysicsBody(rectangleOf: UFOEntity.ufoSize)
-        body.categoryBitMask = GameConstants.PhysicsCategory.ufo
-        body.contactTestBitMask = GameConstants.Performance.manualPlayerBulletCollision
-            ? GameConstants.PhysicsCategory.none
-            : GameConstants.PhysicsCategory.playerBullet
-        body.collisionBitMask = 0
-        body.isDynamic = false
-        body.affectedByGravity = false
-        node.physicsBody = body
+        // Physics body is only needed when SpriteKit handles player bullet contacts.
+        if GameConstants.Performance.manualPlayerBulletCollision {
+            node.physicsBody = nil
+        } else {
+            let body = SKPhysicsBody(rectangleOf: UFOEntity.ufoSize)
+            body.categoryBitMask = GameConstants.PhysicsCategory.ufo
+            body.contactTestBitMask = GameConstants.PhysicsCategory.playerBullet
+            body.collisionBitMask = 0
+            body.isDynamic = false
+            body.affectedByGravity = false
+            node.physicsBody = body
+        }
 
         // Random entry side — fly near the top (proportional Y position)
         let enterFromLeft = Bool.random()

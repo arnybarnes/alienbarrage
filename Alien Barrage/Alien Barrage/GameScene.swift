@@ -74,6 +74,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // Respawn state — pauses enemy attacks during glitch-in animation
     private var isRespawning: Bool = false
     private var lastShootSoundTime: Double = 0
+    private var lastEnemyDeathSoundTime: TimeInterval = 0
     private var transitionStallStartedAt: TimeInterval = 0
     private var lastTransitionWatchdogLogAt: TimeInterval = 0
 
@@ -109,7 +110,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         PerformanceLog.sessionStart()
         PerformanceLog.event(
             "PerfConfig",
-            "manualPB=\(GameConstants.Performance.manualPlayerBulletCollision) spreadStagger=\(GameConstants.Performance.spreadShotStagger) bandH=\(GameConstants.Performance.manualCollisionBandHeight) resolveCap=\(GameConstants.Performance.manualResolutionMaxPerFrame) budgetMs=\(GameConstants.Performance.manualResolutionBudgetMs) liteFxBacklog=\(GameConstants.Performance.manualResolutionLiteFxBacklog) preferLiteFx=\(GameConstants.Performance.manualResolutionPreferLiteFX) outlierMs=\(GameConstants.Performance.manualSweepOutlierThresholdMs)"
+            "manualPB=\(GameConstants.Performance.manualPlayerBulletCollision) spreadStagger=\(GameConstants.Performance.spreadShotStagger) playerCap=\(GameConstants.Performance.maxActivePlayerBullets) playerCapSpeed=\(GameConstants.Performance.playerBulletCapSpeedMultiplier) enemyCap=\(GameConstants.Performance.maxActiveEnemyBullets) bandH=\(GameConstants.Performance.manualCollisionBandHeight) resolveCap=\(GameConstants.Performance.manualResolutionMaxPerFrame) budgetMs=\(GameConstants.Performance.manualResolutionBudgetMs) liteFxBacklog=\(GameConstants.Performance.manualResolutionLiteFxBacklog) preferLiteFx=\(GameConstants.Performance.manualResolutionPreferLiteFX) outlierMs=\(GameConstants.Performance.manualSweepOutlierThresholdMs) resolveOutlierMs=\(GameConstants.Performance.manualResolveOutlierThresholdMs) frameGapMs=\(GameConstants.Performance.frameGapThresholdMs) frameGapUnexplainedMs=\(GameConstants.Performance.frameGapUnexplainedThresholdMs) enemyDeathSfxMs=\(GameConstants.Performance.enemyDeathSoundMinInterval) enemyDeathSfxReduced=\(GameConstants.Performance.enemyDeathSoundDuringReducedFX) enemyDeathSfxBonus=\(GameConstants.Performance.enemyDeathSoundDuringBonusRounds)"
         )
         #endif
 
@@ -260,6 +261,29 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - Bullet Spawning
 
+    private func playEnemyDeathSoundThrottled(reducedFX: Bool) {
+        // In reduced-FX mode we prioritize frame stability over per-kill audio.
+        if reducedFX && !GameConstants.Performance.enemyDeathSoundDuringReducedFX {
+            return
+        }
+
+        if bonusRoundActive && !GameConstants.Performance.enemyDeathSoundDuringBonusRounds {
+            return
+        }
+
+        let minInterval = max(0, GameConstants.Performance.enemyDeathSoundMinInterval)
+        if minInterval == 0 {
+            AudioManager.shared.play(GameConstants.Sound.enemyDeath)
+            return
+        }
+
+        let now = CACurrentMediaTime()
+        if now - lastEnemyDeathSoundTime >= minInterval {
+            AudioManager.shared.play(GameConstants.Sound.enemyDeath)
+            lastEnemyDeathSoundTime = now
+        }
+    }
+
     private func spawnPlayerBullet() {
         guard !isRespawning else { return }
         // Throttle shoot sound — skip if last sound was <0.15s ago (only affects rapid fire)
@@ -291,15 +315,22 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             guard let self else { return }
             guard self.gameState == .playing || self.gameState == .levelTransition else { return }
             guard !self.isRespawning else { return }
+            self.enforcePlayerBulletCapIfNeeded()
 
-            let bullet = ProjectileEntity(position: position, sceneHeight: self.size.height)
+            let speedMultiplier = self.playerBulletSpeedMultiplierForCurrentState()
+            let bullet = ProjectileEntity(
+                position: position,
+                sceneHeight: self.size.height,
+                speedMultiplier: speedMultiplier
+            )
             let node = bullet.spriteComponent.node
 
             if angle != 0 {
                 // Replace the default straight-up action with angled movement.
                 node.removeAllActions()
                 let distance = self.size.height - position.y + ProjectileEntity.bulletSize.height
-                let duration = TimeInterval(distance / GameConstants.playerBulletSpeed)
+                let speed = GameConstants.playerBulletSpeed * GameConstants.heightRatio * max(0.1, speedMultiplier)
+                let duration = TimeInterval(distance / speed)
                 let dx = sin(angle) * distance
                 let move = SKAction.moveBy(x: dx, y: distance, duration: duration)
                 let remove = SKAction.removeFromParent()
@@ -348,12 +379,87 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         clearPendingManualHits()
     }
 
+    private func activePlayerBulletNodes() -> [SKSpriteNode] {
+        if GameConstants.Performance.manualPlayerBulletCollision {
+            let staleIDs = trackedPlayerBullets.compactMap { pair in
+                let (id, node) = pair
+                return node.parent == nil ? id : nil
+            }
+            for id in staleIDs {
+                trackedPlayerBullets.removeValue(forKey: id)
+                playerBulletPreviousPositions.removeValue(forKey: id)
+            }
+            return Array(trackedPlayerBullets.values)
+        }
+
+        return entities.compactMap { entity in
+            guard let bullet = entity as? ProjectileEntity else { return nil }
+            let node = bullet.spriteComponent.node
+            return node.parent != nil ? node : nil
+        }
+    }
+
+    private func activeEnemyBulletCount() -> Int {
+        entities.reduce(into: 0) { count, entity in
+            guard let bullet = entity as? EnemyProjectileEntity else { return }
+            if bullet.spriteComponent.node.parent != nil {
+                count += 1
+            }
+        }
+    }
+
+    private func playerBulletSpeedMultiplierForCurrentState() -> CGFloat {
+        guard GameConstants.Performance.maxActivePlayerBullets > 0 else { return 1.0 }
+        let underCapPressure =
+            playerEntity.activePowerups.contains(.rapidFire) ||
+            playerEntity.activePowerups.contains(.spreadShot)
+        guard underCapPressure else { return 1.0 }
+        return max(1.0, GameConstants.Performance.playerBulletCapSpeedMultiplier)
+    }
+
+    private func enforcePlayerBulletCapIfNeeded() {
+        var maxBullets = GameConstants.Performance.maxActivePlayerBullets
+        if playerEntity.activePowerups.contains(.spreadShot) {
+            // Spread shot needs a little extra headroom so side bullets can travel long enough.
+            maxBullets += 6
+        }
+        guard maxBullets > 0 else { return }
+
+        let activeBullets = activePlayerBulletNodes()
+        guard activeBullets.count >= maxBullets else { return }
+
+        let preserveHighTravelBullets = playerEntity.activePowerups.contains(.spreadShot) || ufoEntity != nil
+        let bulletToEvict: SKSpriteNode?
+        if preserveHighTravelBullets {
+            // During spread/UFO pressure, keep far-travel bullets alive and trim near-player bullets first.
+            bulletToEvict = activeBullets.min(by: { $0.position.y < $1.position.y })
+        } else {
+            // Default behavior keeps newest shots visible by trimming the farthest bullet first.
+            bulletToEvict = activeBullets.max(by: { $0.position.y < $1.position.y })
+        }
+        guard let bulletToEvict else { return }
+
+        removePlayerBullet(bulletToEvict)
+        PerformanceLog.bulletCap(
+            playerEvictions: 1,
+            playerNearEvictions: preserveHighTravelBullets ? 1 : 0,
+            playerFarEvictions: preserveHighTravelBullets ? 0 : 1,
+            playerSpreadOrUFOEvictions: preserveHighTravelBullets ? 1 : 0
+        )
+    }
+
     // MARK: - Enemy Shooting
 
     private func spawnEnemyBullet() {
         guard gameState == .playing,
               let formation = alienFormation,
               !formation.allDestroyed else { return }
+
+        let maxEnemyBullets = GameConstants.Performance.maxActiveEnemyBullets
+        if maxEnemyBullets > 0 && activeEnemyBulletCount() >= maxEnemyBullets {
+            PerformanceLog.bulletCap(enemySkips: 1)
+            return
+        }
 
         // Collect columns that have alive aliens
         var shooterCandidates: [AlienEntity] = []
@@ -434,23 +540,19 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         guard let (alien, _) = formation.extractRandomSwooper(into: worldNode) else { return }
 
         swoopingAliens.append(alien)
+        entities.append(alien)  // manual collision scans entities for swooper targets
 
         let node = alien.spriteComponent.node
 
-        // Attach swoop sound to the alien node — stops automatically when node is removed
+        // Play swoop SFX via AudioManager (preloaded AVAudioEngine path).
+        // This avoids first-use SKAudioNode file decode stalls.
         let swoopSound = GameConstants.Sound.alienSwoop
         if !swoopSound.isEmpty && !AudioManager.shared.isMuted(swoopSound) {
-            let audioNode = SKAudioNode(fileNamed: swoopSound)
-            audioNode.autoplayLooped = false
-            audioNode.name = "swoopSound"
-            node.addChild(audioNode)
-            audioNode.run(SKAction.play())
+            AudioManager.shared.play(swoopSound)
         }
 
-        // Update physics so swooper can contact the player
-        node.physicsBody?.contactTestBitMask |= GameConstants.PhysicsCategory.player
-        node.physicsBody?.isDynamic = true
-        node.physicsBody?.affectedByGravity = false
+        // Ensure swoopers have an active player-contact collider.
+        alien.enableSwoopPhysics()
 
         // Build path and calculate duration from speed
         let playerX = playerEntity.spriteComponent.node.position.x
@@ -964,12 +1066,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         var resolvedHits = 0
         var reducedFXHits = 0
 
-        while !pendingManualHits.isEmpty {
+        while true {
             if resolvedHits >= maxPerFrame { break }
             let elapsedMs = (CACurrentMediaTime() - resolveStart) * 1000
             if elapsedMs >= budgetMs { break }
 
-            let pending = pendingManualHits.removeFirst()
+            guard let pending = pendingManualHits.popLast() else { break }
 
             let backlogAfterCurrent = pendingManualHits.count
             let preferLiteFX = GameConstants.Performance.manualResolutionPreferLiteFX
@@ -1244,9 +1346,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         reducedFX: Bool
     ) {
         guard gameState == .playing || gameState == .levelTransition else { return }
+        let wasSwooper = alienEntity.isSwooping
+
+        #if DEBUG
+        let shouldProfileResolve = GameConstants.Performance.manualResolveOutlierLogging
+        let resolveStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+        var damageMs: Double = 0
+        var sparkMs: Double = 0
+        var audioMs: Double = 0
+        var formationRemoveMs: Double = 0
+        var scoreFxMs: Double = 0
+        var powerupMs: Double = 0
+        var cleanupMs: Double = 0
+        var completionMs: Double = 0
+        var droppedPowerup = false
+        #endif
+
         // Spark effect at impact — swooping aliens are already in world coords.
         let impactPos: CGPoint
-        if alienEntity.isSwooping {
+        if wasSwooper {
             impactPos = alienNode.position
         } else if let formationNode = alienNode.parent {
             impactPos = formationNode.convert(alienNode.position, to: worldNode)
@@ -1255,30 +1373,75 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         // All aliens die in one hit.
+        #if DEBUG
+        let damageStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+        #endif
         let isDead = alienEntity.healthComponent.takeDamage(alienEntity.healthComponent.currentHP)
+        #if DEBUG
+        if shouldProfileResolve {
+            damageMs = (CACurrentMediaTime() - damageStart) * 1000
+        }
+        #endif
+
         if !reducedFX {
+            #if DEBUG
+            let sparkStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             ParticleEffects.spawnSparkBurst(at: impactPos, in: worldNode.scene ?? self)
+            #if DEBUG
+            if shouldProfileResolve {
+                sparkMs = (CACurrentMediaTime() - sparkStart) * 1000
+            }
+            #endif
         }
 
         if isDead {
-            AudioManager.shared.play(GameConstants.Sound.enemyDeath)
+            #if DEBUG
+            let audioStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
+            playEnemyDeathSoundThrottled(reducedFX: reducedFX)
             if GameConstants.Haptic.alienKilled { HapticManager.shared.mediumImpact() }
+            #if DEBUG
+            if shouldProfileResolve {
+                audioMs = (CACurrentMediaTime() - audioStart) * 1000
+            }
+            #endif
 
-            if alienEntity.isSwooping {
+            if wasSwooper {
                 // Swooper: clean up directly (already removed from grid).
                 let scoreValue = bonusRoundActive ? GameConstants.bonusRoundKillScore : alienEntity.scoreValueComponent.value
                 let scaledScore = scoreManager.scaledValue(scoreValue)
+                #if DEBUG
+                let scoreFxStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                #endif
                 if reducedFX {
                     ExplosionEffect.spawnScorePopup(at: impactPos, in: self, scoreValue: scaledScore)
                 } else {
                     ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scaledScore)
                 }
                 scoreManager.addPoints(scoreValue)
+                #if DEBUG
+                if shouldProfileResolve {
+                    scoreFxMs += (CACurrentMediaTime() - scoreFxStart) * 1000
+                }
+                #endif
 
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
+                    #if DEBUG
+                    let powerupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                    #endif
                     spawnPowerup(at: impactPos)
+                    #if DEBUG
+                    droppedPowerup = true
+                    if shouldProfileResolve {
+                        powerupMs += (CACurrentMediaTime() - powerupStart) * 1000
+                    }
+                    #endif
                 }
 
+                #if DEBUG
+                let cleanupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                #endif
                 alienEntity.isAlive = false
                 alienEntity.isSwooping = false
                 if bonusRoundActive { detachGoldTrail(from: alienNode) }
@@ -1286,34 +1449,92 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 alienNode.removeFromParent()
                 swoopingAliens.removeAll { $0 === alienEntity }
                 alienFormation?.swooperDestroyed()
+                #if DEBUG
+                if shouldProfileResolve {
+                    cleanupMs += (CACurrentMediaTime() - cleanupStart) * 1000
+                }
+                #endif
 
                 if bonusRoundActive {
+                    #if DEBUG
+                    let completionStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                    #endif
                     bonusRoundHits += 1
                     bonusAliensResolved += 1
                     checkBonusRoundComplete()
+                    #if DEBUG
+                    if shouldProfileResolve {
+                        completionMs += (CACurrentMediaTime() - completionStart) * 1000
+                    }
+                    #endif
                 }
             } else {
+                #if DEBUG
+                let formationRemoveStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                #endif
                 alienFormation?.removeAlien(row: alienEntity.row, col: alienEntity.col)
+                #if DEBUG
+                if shouldProfileResolve {
+                    formationRemoveMs += (CACurrentMediaTime() - formationRemoveStart) * 1000
+                }
+                #endif
 
                 let scoreValue = alienEntity.scoreValueComponent.value
                 let scaledScore = scoreManager.scaledValue(scoreValue)
+                #if DEBUG
+                let scoreFxStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                #endif
                 if reducedFX {
                     ExplosionEffect.spawnScorePopup(at: impactPos, in: self, scoreValue: scaledScore)
                 } else {
                     ExplosionEffect.spawn(at: impactPos, in: self, scoreValue: scaledScore)
                 }
                 scoreManager.addPoints(scoreValue)
+                #if DEBUG
+                if shouldProfileResolve {
+                    scoreFxMs += (CACurrentMediaTime() - scoreFxStart) * 1000
+                }
+                #endif
 
                 // Chance to drop powerup (disabled in bonus rounds).
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
+                    #if DEBUG
+                    let powerupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+                    #endif
                     spawnPowerup(at: impactPos)
+                    #if DEBUG
+                    droppedPowerup = true
+                    if shouldProfileResolve {
+                        powerupMs += (CACurrentMediaTime() - powerupStart) * 1000
+                    }
+                    #endif
                 }
             }
         } else if !reducedFX {
+            #if DEBUG
+            let cleanupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             let colorize = SKAction.colorize(with: .white, colorBlendFactor: 1.0, duration: 0.05)
             let restore = SKAction.colorize(withColorBlendFactor: 0.0, duration: 0.1)
             alienNode.run(SKAction.sequence([colorize, restore]))
+            #if DEBUG
+            if shouldProfileResolve {
+                cleanupMs += (CACurrentMediaTime() - cleanupStart) * 1000
+            }
+            #endif
         }
+
+        #if DEBUG
+        if shouldProfileResolve {
+            let totalMs = (CACurrentMediaTime() - resolveStart) * 1000
+            if totalMs >= GameConstants.Performance.manualResolveOutlierThresholdMs {
+                PerformanceLog.event(
+                    "ManualResolve",
+                    "manualResolve kind=enemy total=\(String(format: "%.3f", totalMs))ms damage=\(String(format: "%.3f", damageMs)) spark=\(String(format: "%.3f", sparkMs)) audio=\(String(format: "%.3f", audioMs)) formationRemove=\(String(format: "%.3f", formationRemoveMs)) scoreFx=\(String(format: "%.3f", scoreFxMs)) powerup=\(String(format: "%.3f", powerupMs)) cleanup=\(String(format: "%.3f", cleanupMs)) completion=\(String(format: "%.3f", completionMs)) isDead=\(isDead) swooper=\(wasSwooper) reducedFX=\(reducedFX) droppedPowerup=\(droppedPowerup) level=\(currentLevel) bonus=\(bonusRoundActive)"
+                )
+            }
+        }
+        #endif
     }
 
     private func handleEnemyBulletHitsPlayer(bulletBody: SKPhysicsBody, playerBody: SKPhysicsBody) {
@@ -1375,35 +1596,108 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         reducedFX: Bool
     ) {
         guard gameState == .playing || gameState == .levelTransition else { return }
+
+        #if DEBUG
+        let shouldProfileResolve = GameConstants.Performance.manualResolveOutlierLogging
+        let resolveStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+        var sparkMs: Double = 0
+        var damageMs: Double = 0
+        var audioMs: Double = 0
+        var scoreFxMs: Double = 0
+        var cleanupMs: Double = 0
+        #endif
+
         // Spark effect.
         if !reducedFX {
+            #if DEBUG
+            let sparkStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             ParticleEffects.spawnSparkBurst(at: ufoNode.position, in: self)
+            #if DEBUG
+            if shouldProfileResolve {
+                sparkMs = (CACurrentMediaTime() - sparkStart) * 1000
+            }
+            #endif
         }
 
+        #if DEBUG
+        let damageStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+        #endif
         let isDead = ufo.healthComponent.takeDamage(1)
+        #if DEBUG
+        if shouldProfileResolve {
+            damageMs = (CACurrentMediaTime() - damageStart) * 1000
+        }
+        #endif
 
         if isDead {
+            #if DEBUG
+            let audioStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             AudioManager.shared.play(GameConstants.Sound.ufoDestroyed)
             if GameConstants.Haptic.ufoDestroyed { HapticManager.shared.mediumImpact() }
+            #if DEBUG
+            if shouldProfileResolve {
+                audioMs = (CACurrentMediaTime() - audioStart) * 1000
+            }
+            #endif
 
             let worldPos = ufoNode.position
             let scoreValue = ufo.scoreValueComponent.value
             let scaledScore = scoreManager.scaledValue(scoreValue)
+            #if DEBUG
+            let scoreFxStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             if reducedFX {
                 ExplosionEffect.spawnScorePopup(at: worldPos, in: self, scoreValue: scaledScore)
             } else {
                 ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scaledScore)
             }
             scoreManager.addPoints(scoreValue)
+            #if DEBUG
+            if shouldProfileResolve {
+                scoreFxMs = (CACurrentMediaTime() - scoreFxStart) * 1000
+            }
+            #endif
+
+            #if DEBUG
+            let cleanupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
+            AudioManager.shared.stopLoop(GameConstants.Sound.ufoAmbience)
             ufoNode.removeFromParent()
             ufoEntity = nil
+            #if DEBUG
+            if shouldProfileResolve {
+                cleanupMs = (CACurrentMediaTime() - cleanupStart) * 1000
+            }
+            #endif
         } else if !reducedFX {
+            #if DEBUG
+            let cleanupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
+            #endif
             let blink = SKAction.sequence([
                 SKAction.fadeAlpha(to: 0.2, duration: 0.05),
                 SKAction.fadeAlpha(to: 1.0, duration: 0.1)
             ])
             ufoNode.run(blink)
+            #if DEBUG
+            if shouldProfileResolve {
+                cleanupMs = (CACurrentMediaTime() - cleanupStart) * 1000
+            }
+            #endif
         }
+
+        #if DEBUG
+        if shouldProfileResolve {
+            let totalMs = (CACurrentMediaTime() - resolveStart) * 1000
+            if totalMs >= GameConstants.Performance.manualResolveOutlierThresholdMs {
+                PerformanceLog.event(
+                    "ManualResolve",
+                    "manualResolve kind=ufo total=\(String(format: "%.3f", totalMs))ms spark=\(String(format: "%.3f", sparkMs)) damage=\(String(format: "%.3f", damageMs)) audio=\(String(format: "%.3f", audioMs)) scoreFx=\(String(format: "%.3f", scoreFxMs)) cleanup=\(String(format: "%.3f", cleanupMs)) isDead=\(isDead) reducedFX=\(reducedFX) level=\(currentLevel) bonus=\(bonusRoundActive)"
+                )
+            }
+        }
+        #endif
     }
 
     private func handlePlayerCollectsPowerup(powerupBody: SKPhysicsBody) {
@@ -2001,17 +2295,15 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         entities.append(ufo)
         ufoEntity = ufo
 
-        // Looping ambience attached to UFO node — stops when node is removed
+        // Looping ambience via AudioManager (preloaded AVAudioEngine path).
         let ambienceSound = GameConstants.Sound.ufoAmbience
         if !ambienceSound.isEmpty && !AudioManager.shared.isMuted(ambienceSound) {
-            let audioNode = SKAudioNode(fileNamed: ambienceSound)
-            audioNode.autoplayLooped = true
-            audioNode.name = "ufoAmbience"
-            ufo.spriteComponent.node.addChild(audioNode)
+            AudioManager.shared.playLoop(ambienceSound)
         }
     }
 
     private func removeUFO() {
+        AudioManager.shared.stopLoop(GameConstants.Sound.ufoAmbience)
         ufoEntity?.spriteComponent.node.removeFromParent()
         ufoEntity = nil
     }
@@ -2166,7 +2458,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             // Track UFO removal (flew off-screen)
             if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
-                ufoEntity = nil
+                removeUFO()
             }
 
             if GameConstants.Performance.manualPlayerBulletCollision {

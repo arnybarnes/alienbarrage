@@ -8,9 +8,16 @@ import SpriteKit
 enum ExplosionEffect {
 
     private static var popupPool: [SKLabelNode] = []
+    private static var didWarmUpAssets = false
 
     /// Pre-create score popup label pool. Call once during scene setup.
     static func warmUp() {
+        if !didWarmUpAssets {
+            didWarmUpAssets = true
+            ExplosionSpriteSheet.shared.warmUp()
+            PowerupSpinSheet.shared.warmUp()
+        }
+
         if popupPool.isEmpty {
             for _ in 0..<8 {
                 let label = SKLabelNode(fontNamed: "Menlo-Bold")

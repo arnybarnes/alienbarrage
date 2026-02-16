@@ -63,3 +63,49 @@ Best New Options (Prioritized)
 
   - Alien/body count can scale high (Alien Barrage/Alien Barrage/LevelManager.swift:45, plus extra columns on wide screens
     at Alien Barrage/Alien Barrage/GameScene.swift:197), so structural reductions beat micro-optimizations.
+
+#### Progress Update
+
+- ✅ `#1` Manual playerBullet -> enemy/ufo collisions implemented (hybrid model kept for enemyBullet/player + powerups).
+- ✅ `#4` Spread-shot spawn staggering implemented.
+- ✅ `#7` Per-contact-type telemetry implemented.
+- ✅ `#2` Collider-count reduction implemented for the active manual-collision path:
+  - Formation aliens and UFO no longer create physics bodies when manual player-bullet collision is enabled.
+  - Swoopers explicitly enable collider behavior when they enter player-contact gameplay.
+- ✅ `#5` Active-bullet caps implemented with gameplay compensation:
+  - Player bullets are capped (`maxActivePlayerBullets`) with contextual eviction:
+    - default path evicts far-travel bullets to keep firing responsive.
+    - spread/UFO pressure path evicts near-player bullets first to preserve long-travel shots.
+  - Enemy bullets are capped (`maxActiveEnemyBullets`) to bound late-level projectile churn.
+  - Under rapid-fire/spread pressure, player bullets get a speed multiplier (`playerBulletCapSpeedMultiplier`) to offset cap pressure.
+  - Per-level telemetry reports cap activity (`bulletCap playerEvict=... enemySkip=...`) and now includes player-eviction policy split (`near=... far=... spreadOrUFO=...`).
+- ✅ Added startup warm-up for lazy-loaded combat assets:
+  - Explosion frame sequences (`explosions.png`) are pre-decoded at scene start.
+  - Powerup spin-sheet frames (`powerups.png`) are pre-decoded at scene start.
+- ✅ Added per-hit manual resolve outlier logging:
+  - New `manualResolve ...` event lines break down expensive resolve phases (`damage`, `audio`, `scoreFx`, `powerup`, `cleanup`, etc.) when a resolve exceeds threshold.
+- ✅ Crash hardening for manual-hit queue:
+  - Resolution loop now uses a safe optional pop (`popLast`) instead of forced front-removal to avoid `RangeReplaceableCollection` over-removal crashes.
+- ✅ Additional diagnostics for next profiling pass:
+  - Manual resolve outlier threshold lowered to `20ms` to emit more per-hit breakdowns.
+  - Added `[FRAME_GAP]` logging for high-`dt` frames where `FrameTotal` time is comparatively low.
+- ✅ Manual resolve outlier root cause identified and mitigated:
+  - New logs show `manualResolve` outliers are dominated by enemy-death audio playback (`audio≈21ms` per hit).
+  - Added enemy-death SFX throttling (`enemyDeathSoundMinInterval`) to prevent per-kill audio stalls.
+  - Strengthened the mitigation for active perf testing:
+    - Disabled enemy-death SFX while reduced-FX resolves are active (`enemyDeathSoundDuringReducedFX=false`).
+    - Disabled enemy-death SFX during bonus rounds (`enemyDeathSoundDuringBonusRounds=false`).
+- ✅ Candidate fix for repeatable early Level 1 frame-gap hitch:
+  - Replaced first-use per-swooper `SKAudioNode(fileNamed:)` playback with preloaded `AudioManager` playback for `alienSwoop`.
+  - Goal: avoid lazy `SKAudioNode` decode/attach stall around the first swoop event.
+- ✅ Follow-up fix for remaining early-session hitch (often Level 2/3):
+  - Replaced UFO ambience `SKAudioNode(fileNamed:)` loop with `AudioManager` loop playback (`playLoop/stopLoop`) and explicit stop on all UFO cleanup paths.
+  - Goal: avoid first-use `SKAudioNode` loop initialization stalls when UFO ambience first starts.
+  - Validation (latest run): no `[FRAME_GAP]` entries, no early-level pause repro, and session `worst_dt` reduced to ~`50ms` range.
+- ✅ Spread-shot projectile longevity fix:
+  - Player bullet cap now gives spread-shot extra headroom.
+  - When spread/UFO pressure is active, cap eviction trims near-player bullets first so long-travel shots can still reach UFOs.
+- 🔜 Next best candidates:
+  - `#8` Add profile-light mode to reduce debug instrumentation overhead during perf sessions.
+  - `#3` Decouple alien visual animation from collider nodes (larger refactor, still valuable).
+  - `#6` Immediately zero physics masks/body on first hit before removal (small, low-risk win for non-manual contact paths).

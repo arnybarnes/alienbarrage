@@ -80,15 +80,18 @@ class AlienEntity: GKEntity {
         node.userData?["entity"] = self
 
         // Physics body for collision detection
-        let body = SKPhysicsBody(rectangleOf: type.size)
-        body.categoryBitMask = GameConstants.PhysicsCategory.enemy
-        body.contactTestBitMask = GameConstants.Performance.manualPlayerBulletCollision
-            ? GameConstants.PhysicsCategory.none
-            : GameConstants.PhysicsCategory.playerBullet
-        body.collisionBitMask = 0
-        body.isDynamic = false
-        body.affectedByGravity = false
-        node.physicsBody = body
+        if GameConstants.Performance.manualPlayerBulletCollision {
+            // Formation aliens do not need physics while manual player-bullet collision is enabled.
+            node.physicsBody = nil
+        } else {
+            let body = SKPhysicsBody(rectangleOf: type.size)
+            body.categoryBitMask = GameConstants.PhysicsCategory.enemy
+            body.contactTestBitMask = GameConstants.PhysicsCategory.playerBullet
+            body.collisionBitMask = 0
+            body.isDynamic = false
+            body.affectedByGravity = false
+            node.physicsBody = body
+        }
 
         setupAliveMotionBehavior(on: node)
         if GameConstants.VisualFX.alienEyeGlowEnabled {
@@ -134,6 +137,20 @@ class AlienEntity: GKEntity {
         let loop = SKAction.repeatForever(SKAction.sequence([cycle, settle, driftPause]))
         let start = SKAction.sequence([SKAction.wait(forDuration: phaseDelay), loop])
         node.run(start, withKey: "alienAliveMotion")
+    }
+
+    func enableSwoopPhysics() {
+        let node = spriteComponent.node
+        let body = node.physicsBody ?? SKPhysicsBody(rectangleOf: alienType.size)
+        body.categoryBitMask = GameConstants.PhysicsCategory.enemy
+        let playerBulletMask = GameConstants.Performance.manualPlayerBulletCollision
+            ? GameConstants.PhysicsCategory.none
+            : GameConstants.PhysicsCategory.playerBullet
+        body.contactTestBitMask = playerBulletMask | GameConstants.PhysicsCategory.player
+        body.collisionBitMask = 0
+        body.isDynamic = true
+        body.affectedByGravity = false
+        node.physicsBody = body
     }
 
     private func setupEyeGlowBehavior(spriteName: String, baseTexture: SKTexture, on node: SKSpriteNode) {

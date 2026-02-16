@@ -9,6 +9,7 @@ class AudioManager {
     /// Pre-loaded PCM buffers and player node pools, keyed by sound name
     private let engine = AVAudioEngine()
     private var pools: [String: SoundPool] = [:]
+    private var loopNodes: [String: AVAudioPlayerNode] = [:]
 
     private class SoundPool {
         let buffer: AVAudioPCMBuffer
@@ -85,6 +86,12 @@ class AudioManager {
         UserDefaults.standard.set(Array(mutedSounds), forKey: "mutedSounds")
     }
 
+    private func ensureEngineRunning() {
+        if !engine.isRunning {
+            try? engine.start()
+        }
+    }
+
     func isMuted(_ soundName: String) -> Bool {
         mutedSounds.contains(soundName)
     }
@@ -92,6 +99,7 @@ class AudioManager {
     func setMuted(_ soundName: String, muted: Bool) {
         if muted {
             mutedSounds.insert(soundName)
+            stopLoop(soundName)
         } else {
             mutedSounds.remove(soundName)
         }
@@ -101,6 +109,7 @@ class AudioManager {
     func muteAll() {
         for sound in Self.allSoundFiles where !sound.isEmpty {
             mutedSounds.insert(sound)
+            stopLoop(sound)
         }
         saveMutedSounds()
     }
@@ -121,9 +130,7 @@ class AudioManager {
         }
 
         // Restart engine if interrupted (e.g., phone call)
-        if !engine.isRunning {
-            try? engine.start()
-        }
+        ensureEngineRunning()
 
         // Round-robin through player nodes
         let node = pool.nodes[pool.index]
@@ -132,5 +139,40 @@ class AudioManager {
         node.stop()
         node.scheduleBuffer(pool.buffer, at: nil, options: [], completionHandler: nil)
         node.play()
+    }
+
+    func playLoop(_ soundName: String) {
+        guard !soundName.isEmpty else { return }
+        guard !mutedSounds.contains(soundName) else { return }
+        guard let pool = pools[soundName] else {
+            let msg = "AudioManager: no pool for loop — \(soundName)"
+            print(msg)
+            PerformanceLog.error(msg)
+            return
+        }
+
+        ensureEngineRunning()
+
+        let loopNode: AVAudioPlayerNode
+        if let existing = loopNodes[soundName] {
+            loopNode = existing
+        } else {
+            let node = AVAudioPlayerNode()
+            engine.attach(node)
+            engine.connect(node, to: engine.mainMixerNode, format: pool.buffer.format)
+            loopNodes[soundName] = node
+            loopNode = node
+        }
+
+        if loopNode.isPlaying { return }
+
+        loopNode.stop()
+        loopNode.scheduleBuffer(pool.buffer, at: nil, options: [.loops], completionHandler: nil)
+        loopNode.play()
+    }
+
+    func stopLoop(_ soundName: String) {
+        guard let node = loopNodes[soundName] else { return }
+        node.stop()
     }
 }

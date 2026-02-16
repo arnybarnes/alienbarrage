@@ -61,6 +61,13 @@ final class ExplosionSpriteSheet {
         frames(sequence: Int.random(in: 0...2))
     }
 
+    /// Pre-decodes explosion frame sequences so first-hit gameplay avoids lazy texture setup.
+    func warmUp() {
+        for sequence in 0...2 {
+            _ = frames(sequence: sequence)
+        }
+    }
+
     /// Legacy sprite name support so old explosion keys resolve to this new sheet.
     func sprite(named name: String) -> SKTexture? {
         if let cached = textureCache[name] {

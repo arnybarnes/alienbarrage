@@ -13,7 +13,7 @@ class ProjectileEntity: GKEntity {
     // Preserve the source texture aspect ratio (~1:3) so the full beam shape reads clearly.
     static let bulletSize = CGSize(width: 8, height: 24)
 
-    init(position: CGPoint, sceneHeight: CGFloat) {
+    init(position: CGPoint, sceneHeight: CGFloat, speedMultiplier: CGFloat = 1.0) {
         guard let texture = SpriteSheet.shared.sprite(named: "playerBullet") else {
             fatalError("Missing playerBullet texture")
         }
@@ -48,7 +48,7 @@ class ProjectileEntity: GKEntity {
 
         // Move upward and remove when off-screen (speed scales with screen height)
         let distance = sceneHeight - position.y + ProjectileEntity.bulletSize.height
-        let speed = GameConstants.playerBulletSpeed * GameConstants.heightRatio
+        let speed = GameConstants.playerBulletSpeed * GameConstants.heightRatio * max(0.1, speedMultiplier)
         let duration = TimeInterval(distance / speed)
         let moveUp = SKAction.moveBy(x: 0, y: distance, duration: duration)
         let remove = SKAction.removeFromParent()

@@ -50,6 +50,14 @@ final class PowerupSpinSheet {
         return first
     }
 
+    /// Pre-decodes all powerup spin animations and first-frame textures.
+    func warmUp() {
+        for spriteName in rowBySpriteName.keys {
+            _ = spinFrames(named: spriteName)
+            _ = baseTexture(named: spriteName)
+        }
+    }
+
     /// Returns a full-loop sequence:
     /// original forward 9 frames + horizontally flipped reverse 9 frames.
     func spinFrames(named spriteName: String) -> [SKTexture]? {
