@@ -95,6 +95,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     override func didMove(to view: SKView) {
+        #if DEBUG
+        PerformanceLog.enabled = true
+        PerformanceLog.openLog()
+        #endif
+
         backgroundColor = .black
         physicsWorld.gravity = .zero
         physicsWorld.contactDelegate = self
@@ -143,6 +148,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             self, selector: #selector(appDidBecomeActive),
             name: UIApplication.didBecomeActiveNotification, object: nil
         )
+    }
+
+    override func willMove(from view: SKView) {
+        super.willMove(from: view)
+        PerformanceLog.closeLog()
     }
 
     @objc private func appWillResignActive() {
@@ -457,6 +467,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     }
 
     private func spawnBonusAlien(wave: Int, index: Int) {
+        PerformanceLog.event("BonusSpawn", "wave=\(wave) index=\(index)")
         let alien = AlienEntity(type: .small, row: 0, col: wave)
         alien.isSwooping = true  // use swooping cleanup path in collision handler
 
@@ -790,6 +801,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Physics Contact
 
     func didBegin(_ contact: SKPhysicsContact) {
+        PerformanceLog.begin("ContactHandler")
+        defer { PerformanceLog.end("ContactHandler") }
+
         let (bodyA, bodyB) = (contact.bodyA, contact.bodyB)
         let maskA = bodyA.categoryBitMask
         let maskB = bodyB.categoryBitMask
@@ -1672,6 +1686,8 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
     // MARK: - Update
 
     override func update(_ currentTime: TimeInterval) {
+        PerformanceLog.begin("FrameTotal")
+
         if lastUpdateTime == 0 {
             lastUpdateTime = currentTime
         }
@@ -1679,9 +1695,11 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         let dt = currentTime - lastUpdateTime
 
         if gameState == .playing || gameState == .levelTransition {
+            PerformanceLog.begin("EntityUpdates")
             for entity in entities {
                 entity.update(deltaTime: dt)
             }
+            PerformanceLog.end("EntityUpdates")
 
             // Track UFO removal (flew off-screen)
             if let ufo = ufoEntity, ufo.spriteComponent.node.parent == nil {
@@ -1690,7 +1708,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         }
 
         if gameState == .playing && !isRespawning {
+            PerformanceLog.begin("FormationUpdate")
             alienFormation?.update(deltaTime: dt)
+            PerformanceLog.end("FormationUpdate")
 
             // Update player vertical ceiling
             if bonusRoundActive {
@@ -1737,20 +1757,40 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
             // Check if aliens reached the bottom (instant game over, disabled in bonus rounds)
             if !bonusRoundActive {
+                PerformanceLog.begin("CheckBottom")
                 checkAliensReachedBottom()
+                PerformanceLog.end("CheckBottom")
             }
 
             // Check level completion
+            PerformanceLog.begin("CheckComplete")
             checkLevelComplete()
+            PerformanceLog.end("CheckComplete")
         }
 
         // Clean up entities whose sprites have been removed from the scene (runs in all states)
+        PerformanceLog.begin("EntityCleanup")
         entities.removeAll { entity in
             if let spriteComp = entity.component(ofType: SpriteComponent.self) {
                 return spriteComp.node.parent == nil
             }
             return false
         }
+        PerformanceLog.end("EntityCleanup")
+
+        PerformanceLog.end("FrameTotal")
+        PerformanceLog.frameSummary(
+            dt: dt,
+            entityCount: entities.count,
+            nodeCount: worldNode.children.count,
+            aliveAliens: alienFormation?.aliveCount ?? 0,
+            level: currentLevel,
+            fireInterval: currentEnemyFireInterval,
+            isBonus: bonusRoundActive,
+            swoopCount: swoopingAliens.count,
+            spriteCount: worldNode.children.filter { $0 is SKSpriteNode }.count,
+            emitterCount: worldNode.children.filter { $0 is SKEmitterNode }.count
+        )
 
         lastUpdateTime = currentTime
     }

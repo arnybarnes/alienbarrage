@@ -65,7 +65,9 @@ class AudioManager {
         guard !soundName.isEmpty else { return }
         guard !mutedSounds.contains(soundName) else { return }
         guard let url = Bundle.main.url(forResource: soundName, withExtension: nil) else {
-            print("AudioManager: file not found — \(soundName)")
+            let msg = "AudioManager: file not found — \(soundName)"
+            print(msg)
+            PerformanceLog.error(msg)
             return
         }
         do {
@@ -73,7 +75,9 @@ class AudioManager {
             player.play()
             players[soundName] = player  // retain until playback finishes
         } catch {
-            print("AudioManager: failed to play \(soundName) — \(error)")
+            let msg = "AudioManager: failed to play \(soundName) — \(error)"
+            print(msg)
+            PerformanceLog.error(msg)
         }
     }
 }

@@ -98,10 +98,15 @@ class AlienFormation {
         // Skip check for one frame after reversing to prevent rapid re-triggers.
         if justReversed {
             justReversed = false
-        } else if shouldReverseDirection() {
-            direction *= -1
-            formationNode.position.y -= GameConstants.alienStepDown * heightRatio
-            justReversed = true
+        } else {
+            PerformanceLog.begin("ReverseCheck")
+            let shouldReverse = shouldReverseDirection()
+            PerformanceLog.end("ReverseCheck")
+            if shouldReverse {
+                direction *= -1
+                formationNode.position.y -= GameConstants.alienStepDown * heightRatio
+                justReversed = true
+            }
         }
     }
 
