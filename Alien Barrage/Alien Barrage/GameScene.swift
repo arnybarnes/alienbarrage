@@ -613,6 +613,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func startBonusRound() {
         for i in 0..<5 { removeAction(forKey: "bonusWave\(i)") }
+        for i in 0..<4 { removeAction(forKey: "bonusPowerup\(i)") }
         removeAction(forKey: "levelStart")
         removeAction(forKey: "waitForClear")
         removeAction(forKey: "waitForClearTimeout")
@@ -635,6 +636,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     self.spawnBonusWave(wave)
                 }
             ]), withKey: "bonusWave\(wave)")
+        }
+
+        // Schedule 4 powerup drops (2 Rapid Fire, 2 Spread Shot) evenly across the round.
+        // Waves span 0–8s; aliens fly a few more seconds after. Space powerups at 2.5s intervals.
+        let bonusPowerupTypes: [PowerupType] = [.rapidFire, .spreadShot, .rapidFire, .spreadShot]
+        let margin: CGFloat = 40
+        for i in 0..<4 {
+            let delay = 0.5 + TimeInterval(i) * 0.5  // 0.5s, 1.0s, 1.5s, 2.0s
+            run(SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.run { [weak self] in
+                    guard let self, self.settings?.powerupsEnabled != false else { return }
+                    let x = CGFloat.random(in: margin...(self.size.width - margin))
+                    let pos = CGPoint(x: x, y: self.size.height + PowerupEntity.powerupSize.height)
+                    let powerup = PowerupEntity(type: bonusPowerupTypes[i], position: pos, sceneHeight: self.size.height, speedMultiplier: 2.0)
+                    self.worldNode.addChild(powerup.spriteComponent.node)
+                    self.entities.append(powerup)
+                }
+            ]), withKey: "bonusPowerup\(i)")
         }
     }
 
@@ -746,7 +766,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Add the end-of-round bonus to the score
         scoreManager.addRawPoints(bonus)
 
-        AudioManager.shared.play(GameConstants.Sound.levelStart)
+        AudioManager.shared.play(GameConstants.Sound.bonusComplete)
 
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
@@ -1091,7 +1111,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             case let .ufo(ufo, node):
                 guard ufoEntity === ufo, node.parent != nil else { continue }
                 PerformanceLog.manualCollisionType("playerBullet-ufo")
-                resolvePlayerBulletHitsUFO(ufoNode: node, ufo: ufo, reducedFX: useReducedFX)
+                resolvePlayerBulletHitsUFO(ufoNode: node, ufo: ufo, reducedFX: false)
                 resolvedHits += 1
                 if useReducedFX { reducedFXHits += 1 }
             }
@@ -1496,7 +1516,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
                 #endif
 
-                // Chance to drop powerup (disabled in bonus rounds).
+                // Chance to drop powerup (disabled in bonus rounds — those are scheduled).
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     #if DEBUG
                     let powerupStart = shouldProfileResolve ? CACurrentMediaTime() : 0
@@ -1651,7 +1671,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if reducedFX {
                 ExplosionEffect.spawnScorePopup(at: worldPos, in: self, scoreValue: scaledScore)
             } else {
-                ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scaledScore)
+                ExplosionEffect.spawnUFO(at: worldPos, in: self, scoreValue: scaledScore)
             }
             scoreManager.addPoints(scoreValue)
             #if DEBUG
@@ -1862,6 +1882,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
             highLabel.position = CGPoint(x: cx, y: belowInsetY - 40 * hs)
             overlay.addChild(highLabel)
+
+            let blink = SKAction.repeatForever(SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.2, duration: 0.4),
+                SKAction.fadeAlpha(to: 1.0, duration: 0.4),
+            ]))
+            highLabel.run(blink)
         }
         let btnW = 250 * hs
         let btnH = 50 * hs
@@ -2310,9 +2336,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - UI Helpers
 
-    private func makeOverlayLabel(text: String, fontSize: CGFloat, gold: Bool = false) -> SKLabelNode {
+    private func makeOverlayLabel(text: String, fontSize: CGFloat, gold: Bool = false, fontName: String = GameConstants.overlayFont) -> SKLabelNode {
         let scaledSize = fontSize * GameConstants.hudScale
-        let label = SKLabelNode(fontNamed: "Menlo-Bold")
+        let label = SKLabelNode(fontNamed: fontName)
         label.text = text
         label.fontSize = scaledSize
         label.fontColor = gold
@@ -2322,7 +2348,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
 
         // Shadow/outline effect via a duplicate label behind
-        let shadow = SKLabelNode(fontNamed: "Menlo-Bold")
+        let shadow = SKLabelNode(fontNamed: fontName)
         shadow.text = text
         shadow.fontSize = scaledSize
         shadow.fontColor = gold

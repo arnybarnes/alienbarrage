@@ -120,7 +120,7 @@ struct SettingsView: View {
                             }
                             mutedSounds = AudioManager.shared.mutedSounds
                         } label: {
-                            Text(allMuted ? "ALL ON" : "ALL OFF")
+                            Text(allMuted ? "SOUND ON" : "SOUND OFF")
                                 .font(.system(size: 20, weight: .bold, design: .monospaced))
                                 .foregroundColor(.green)
                                 .frame(maxWidth: 250)

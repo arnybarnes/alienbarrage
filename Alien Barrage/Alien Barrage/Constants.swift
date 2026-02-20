@@ -97,6 +97,9 @@ enum GameConstants {
         static let gameOver         = false
     }
 
+    // MARK: - Fonts
+    static let overlayFont = "Orbitron-Bold"
+
     // MARK: - Sound File Names
     // Empty string = sound disabled. Set to a filename (e.g. "shoot.wav") to enable.
     struct Sound {
@@ -115,6 +118,7 @@ enum GameConstants {
         static let ufoAmbience         = "SFX_AmbienceSpaceVoidShip2.wav"
         static let ufoDestroyed        = "SFX_Explosion7.wav"
         static let levelStart          = "SFX_WhooshSciFiPassByShip3.wav"
+        static let bonusComplete       = "SFX_CoinRewardMusicDelay7.wav"
         static let gameOver            = "SFX_FanfareMusicLose1.wav"
         static let menuSelect          = "SFX_UiOptionChangev1.wav"
         static let playerHit           = "SFX_Explosion5.wav"

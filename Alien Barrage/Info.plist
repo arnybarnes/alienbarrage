@@ -5,6 +5,7 @@
 	<key>UIAppFonts</key>
 	<array>
 		<string>Nosifer-Regular.ttf</string>
+		<string>Orbitron-Bold.ttf</string>
 	</array>
 	<key>UILaunchScreen</key>
 	<dict/>
