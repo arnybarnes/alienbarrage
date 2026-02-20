@@ -39,6 +39,7 @@ class AudioManager {
         GameConstants.Sound.ufoAmbience,
         GameConstants.Sound.ufoDestroyed,
         GameConstants.Sound.levelStart,
+        GameConstants.Sound.bonusComplete,
         GameConstants.Sound.gameOver,
         GameConstants.Sound.highScore,
     ]

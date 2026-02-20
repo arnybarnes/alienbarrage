@@ -60,7 +60,7 @@ class PowerupEntity: GKEntity {
 
     static let powerupSize = CGSize(width: 30, height: 30)
 
-    init(type: PowerupType, position: CGPoint, sceneHeight: CGFloat) {
+    init(type: PowerupType, position: CGPoint, sceneHeight: CGFloat, speedMultiplier: CGFloat = 1.0) {
         self.type = type
 
         guard let texture = PowerupSpinSheet.shared.baseTexture(named: type.spriteName) else {
@@ -107,7 +107,7 @@ class PowerupEntity: GKEntity {
 
         // Fall downward (speed scales with screen height)
         let distance = position.y + PowerupEntity.powerupSize.height
-        let speed = GameConstants.powerupFallSpeed * GameConstants.heightRatio
+        let speed = GameConstants.powerupFallSpeed * GameConstants.heightRatio * speedMultiplier
         let duration = TimeInterval(distance / speed)
         let moveDown = SKAction.moveBy(x: 0, y: -distance, duration: duration)
         let remove = SKAction.removeFromParent()

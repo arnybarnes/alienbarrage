@@ -613,6 +613,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     private func startBonusRound() {
         for i in 0..<5 { removeAction(forKey: "bonusWave\(i)") }
+        for i in 0..<4 { removeAction(forKey: "bonusPowerup\(i)") }
         removeAction(forKey: "levelStart")
         removeAction(forKey: "waitForClear")
         removeAction(forKey: "waitForClearTimeout")
@@ -635,6 +636,25 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                     self.spawnBonusWave(wave)
                 }
             ]), withKey: "bonusWave\(wave)")
+        }
+
+        // Schedule 4 powerup drops (2 Rapid Fire, 2 Spread Shot) evenly across the round.
+        // Waves span 0–8s; aliens fly a few more seconds after. Space powerups at 2.5s intervals.
+        let bonusPowerupTypes: [PowerupType] = [.rapidFire, .spreadShot, .rapidFire, .spreadShot]
+        let margin: CGFloat = 40
+        for i in 0..<4 {
+            let delay = 0.5 + TimeInterval(i) * 0.5  // 0.5s, 1.0s, 1.5s, 2.0s
+            run(SKAction.sequence([
+                SKAction.wait(forDuration: delay),
+                SKAction.run { [weak self] in
+                    guard let self, self.settings?.powerupsEnabled != false else { return }
+                    let x = CGFloat.random(in: margin...(self.size.width - margin))
+                    let pos = CGPoint(x: x, y: self.size.height + PowerupEntity.powerupSize.height)
+                    let powerup = PowerupEntity(type: bonusPowerupTypes[i], position: pos, sceneHeight: self.size.height, speedMultiplier: 2.0)
+                    self.worldNode.addChild(powerup.spriteComponent.node)
+                    self.entities.append(powerup)
+                }
+            ]), withKey: "bonusPowerup\(i)")
         }
     }
 
@@ -746,7 +766,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         // Add the end-of-round bonus to the score
         scoreManager.addRawPoints(bonus)
 
-        AudioManager.shared.play(GameConstants.Sound.levelStart)
+        AudioManager.shared.play(GameConstants.Sound.bonusComplete)
 
         let overlay = SKNode()
         overlay.zPosition = GameConstants.ZPosition.overlay
@@ -1496,7 +1516,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
                 }
                 #endif
 
-                // Chance to drop powerup (disabled in bonus rounds).
+                // Chance to drop powerup (disabled in bonus rounds — those are scheduled).
                 if !bonusRoundActive && Double.random(in: 0...1) < GameConstants.powerupDropChance * (1.0 + (columnDifficultyRatio - 1.0) * 0.75) {
                     #if DEBUG
                     let powerupStart = shouldProfileResolve ? CACurrentMediaTime() : 0

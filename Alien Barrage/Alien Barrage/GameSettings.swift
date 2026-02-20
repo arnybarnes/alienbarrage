@@ -21,7 +21,7 @@ class GameSettings: ObservableObject {
         let diffRaw = UserDefaults.standard.string(forKey: "difficulty") ?? "normal"
         self.difficulty = Difficulty(rawValue: diffRaw) ?? .normal
         let speed = UserDefaults.standard.double(forKey: "autofireSpeed")
-        self.autofireSpeed = speed > 0 ? min(max(speed, 0.2), 1.0) : 0.7
+        self.autofireSpeed = speed > 0 ? min(max(speed, 0.2), 1.0) : 0.2
     }
 
     var effectiveLives: Int {
