@@ -97,6 +97,9 @@ enum GameConstants {
         static let gameOver         = false
     }
 
+    // MARK: - Fonts
+    static let overlayFont = "Orbitron-Bold"
+
     // MARK: - Sound File Names
     // Empty string = sound disabled. Set to a filename (e.g. "shoot.wav") to enable.
     struct Sound {

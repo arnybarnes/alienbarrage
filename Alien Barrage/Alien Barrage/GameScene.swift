@@ -1882,6 +1882,12 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             let highLabel = makeOverlayLabel(text: "NEW HIGH SCORE!", fontSize: 22)
             highLabel.position = CGPoint(x: cx, y: belowInsetY - 40 * hs)
             overlay.addChild(highLabel)
+
+            let blink = SKAction.repeatForever(SKAction.sequence([
+                SKAction.fadeAlpha(to: 0.2, duration: 0.4),
+                SKAction.fadeAlpha(to: 1.0, duration: 0.4),
+            ]))
+            highLabel.run(blink)
         }
         let btnW = 250 * hs
         let btnH = 50 * hs
@@ -2330,9 +2336,9 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
 
     // MARK: - UI Helpers
 
-    private func makeOverlayLabel(text: String, fontSize: CGFloat, gold: Bool = false) -> SKLabelNode {
+    private func makeOverlayLabel(text: String, fontSize: CGFloat, gold: Bool = false, fontName: String = GameConstants.overlayFont) -> SKLabelNode {
         let scaledSize = fontSize * GameConstants.hudScale
-        let label = SKLabelNode(fontNamed: "Menlo-Bold")
+        let label = SKLabelNode(fontNamed: fontName)
         label.text = text
         label.fontSize = scaledSize
         label.fontColor = gold
@@ -2342,7 +2348,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
         label.verticalAlignmentMode = .center
 
         // Shadow/outline effect via a duplicate label behind
-        let shadow = SKLabelNode(fontNamed: "Menlo-Bold")
+        let shadow = SKLabelNode(fontNamed: fontName)
         shadow.text = text
         shadow.fontSize = scaledSize
         shadow.fontColor = gold
