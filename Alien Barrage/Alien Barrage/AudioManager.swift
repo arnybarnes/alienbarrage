@@ -49,11 +49,30 @@ class AudioManager {
     private init() {
         let saved = UserDefaults.standard.stringArray(forKey: "mutedSounds") ?? []
         mutedSounds = Set(saved)
+        configureAudioSession()
         preloadAll()
+
+        // Don't start the engine if all sounds are already muted
+        if !allMuted {
+            do {
+                try engine.start()
+            } catch {
+                print("AudioManager: engine start failed — \(error)")
+            }
+        }
+    }
+
+    /// True when every game sound is muted
+    var allMuted: Bool {
+        Self.allSoundFiles.allSatisfy { $0.isEmpty || mutedSounds.contains($0) }
+    }
+
+    private func configureAudioSession() {
         do {
-            try engine.start()
+            try AVAudioSession.sharedInstance().setCategory(.ambient, options: .mixWithOthers)
+            try AVAudioSession.sharedInstance().setActive(true)
         } catch {
-            print("AudioManager: engine start failed — \(error)")
+            print("AudioManager: audio session config failed — \(error)")
         }
     }
 
@@ -105,6 +124,12 @@ class AudioManager {
             mutedSounds.remove(soundName)
         }
         saveMutedSounds()
+
+        if allMuted {
+            engine.stop()
+        } else if !engine.isRunning {
+            ensureEngineRunning()
+        }
     }
 
     func muteAll() {
@@ -113,11 +138,13 @@ class AudioManager {
             stopLoop(sound)
         }
         saveMutedSounds()
+        engine.stop()
     }
 
     func unmuteAll() {
         mutedSounds.removeAll()
         saveMutedSounds()
+        ensureEngineRunning()
     }
 
     func play(_ soundName: String) {

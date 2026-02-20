@@ -1111,7 +1111,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             case let .ufo(ufo, node):
                 guard ufoEntity === ufo, node.parent != nil else { continue }
                 PerformanceLog.manualCollisionType("playerBullet-ufo")
-                resolvePlayerBulletHitsUFO(ufoNode: node, ufo: ufo, reducedFX: useReducedFX)
+                resolvePlayerBulletHitsUFO(ufoNode: node, ufo: ufo, reducedFX: false)
                 resolvedHits += 1
                 if useReducedFX { reducedFXHits += 1 }
             }
@@ -1671,7 +1671,7 @@ class GameScene: SKScene, SKPhysicsContactDelegate {
             if reducedFX {
                 ExplosionEffect.spawnScorePopup(at: worldPos, in: self, scoreValue: scaledScore)
             } else {
-                ExplosionEffect.spawn(at: worldPos, in: self, scoreValue: scaledScore)
+                ExplosionEffect.spawnUFO(at: worldPos, in: self, scoreValue: scaledScore)
             }
             scoreManager.addPoints(scoreValue)
             #if DEBUG
